@@ -9,7 +9,7 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 pub struct TestSession {
     writer: Box<dyn Write + Send>,
     parser: Arc<Mutex<vt100::Parser>>,
-    _child: Box<dyn portable_pty::Child + Send + Sync>,
+    child: Box<dyn portable_pty::Child + Send + Sync>,
     _master: Box<dyn portable_pty::MasterPty + Send>,
 }
 
@@ -50,7 +50,7 @@ impl TestSession {
             }
         });
 
-        TestSession { writer, parser, _child: child, _master: pair.master }
+        TestSession { writer, parser, child, _master: pair.master }
     }
 
     pub fn send_str(&mut self, s: &str) {
@@ -76,6 +76,20 @@ impl TestSession {
     pub fn screen(&self) -> Screen {
         let parser = self.parser.lock().unwrap();
         Screen::capture(parser.screen())
+    }
+
+    /// Polls until the child process exits or the timeout is reached.
+    pub fn wait_for_exit(&mut self, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return true,
+                Ok(None) => {}
+                Err(_) => return false,
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
     }
 }
 

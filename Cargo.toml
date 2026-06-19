@@ -7,6 +7,6 @@ edition = "2024"
 anyhow = "1"
 crossterm = "0.29"
 portable-pty = "0.9"
+vt100 = "0.16"
 
 [dev-dependencies]
-vt100 = "0.16"

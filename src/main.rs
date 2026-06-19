@@ -30,7 +30,7 @@ fn run() -> anyhow::Result<()> {
     execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)?;
 
     let (cols, rows) = terminal::size()?;
-    let mut manager = pane_manager::PaneManager::new(cols, rows);
+    let mut manager = pane_manager::PaneManager::new(cols, rows)?;
 
     renderer::draw(&mut stdout, &manager)?;
     stdout.flush()?;
