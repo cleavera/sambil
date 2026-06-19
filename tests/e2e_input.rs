@@ -4,66 +4,57 @@ use std::time::Duration;
 
 use common::{TestSession, CTRL_B};
 
-/// RED: typing a command in the active pane should show output in the left half of the screen.
-/// Fails until Phase 2 (PTY spawning) is implemented.
+/// Typing a command in the active tab should show output full-screen.
 #[test]
-fn typing_in_pane_0_shows_output_in_left_half() {
+fn typing_in_active_tab_shows_output() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
     assert!(
-        session.wait_for_text("│", Duration::from_secs(2)),
-        "sambil did not render border — is it running?\n---\n{}\n---",
-        session.screen().full_text()
+        session.wait_for_text("[*1]", Duration::from_secs(2)),
+        "sambil did not render tab bar"
     );
 
-    session.send_str("echo pane0_output\n");
+    session.send_str("echo tab1_output\n");
 
-    let appeared = session.wait_for_text("pane0_output", Duration::from_secs(2));
-    let screen = session.screen();
-
+    let appeared = session.wait_for_text("tab1_output", Duration::from_secs(2));
     assert!(
         appeared,
-        "Expected 'pane0_output' on screen after typing in pane 0\n---\n{}\n---",
-        screen.full_text()
-    );
-
-    assert!(
-        screen.left_half().contains("pane0_output"),
-        "Expected output in left pane (pane 0), but it wasn't there\nleft:\n{}\nright:\n{}",
-        screen.left_half(),
-        screen.right_half()
+        "Expected 'tab1_output' on screen\n---\n{}\n---",
+        session.screen().full_text()
     );
 }
 
-/// RED: after switching to pane 1 and typing, output should appear in the right half.
-/// Fails until Phase 5 (pane switching) is implemented.
+/// Switching tabs shows a fresh session; switching back restores the original tab's content.
 #[test]
-fn typing_in_pane_1_after_switch_shows_output_in_right_half() {
+fn switching_tabs_shows_correct_content() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(
-        session.wait_for_text("│", Duration::from_secs(2)),
-        "sambil did not render"
-    );
+    assert!(session.wait_for_text("[*1]", Duration::from_secs(2)), "sambil did not render");
 
-    // Switch to pane 1
+    session.send_str("echo tab1_marker\n");
+    assert!(session.wait_for_text("tab1_marker", Duration::from_secs(2)), "tab 1 output did not appear");
+
+    // Switch to tab 2
     session.send_keys(&[CTRL_B, b'n']);
-
-    session.send_str("echo pane1_output\n");
-
-    let appeared = session.wait_for_text("pane1_output", Duration::from_secs(2));
-    let screen = session.screen();
-
     assert!(
-        appeared,
-        "Expected 'pane1_output' on screen after switching to pane 1\n---\n{}\n---",
-        screen.full_text()
+        session.wait_for_text("[*2]", Duration::from_secs(2)),
+        "Tab 2 did not become active\n---\n{}\n---",
+        session.screen().full_text()
     );
 
+    // tab1_marker should NOT be visible in tab 2
+    std::thread::sleep(std::time::Duration::from_millis(100));
     assert!(
-        screen.right_half().contains("pane1_output"),
-        "Expected output in right pane (pane 1)\nleft:\n{}\nright:\n{}",
-        screen.left_half(),
-        screen.right_half()
+        !session.screen().contains("tab1_marker"),
+        "tab1_marker should not be visible in tab 2\n---\n{}\n---",
+        session.screen().full_text()
+    );
+
+    // Switch back to tab 1
+    session.send_keys(&[CTRL_B, b'p']);
+    assert!(
+        session.wait_for_text("tab1_marker", Duration::from_secs(2)),
+        "tab1_marker should reappear after switching back to tab 1\n---\n{}\n---",
+        session.screen().full_text()
     );
 }

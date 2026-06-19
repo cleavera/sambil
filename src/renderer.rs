@@ -48,8 +48,6 @@ impl Renderer {
         Renderer { prev: FrameBuffer::new(rows, cols) }
     }
 
-    /// Invalidates the previous frame so the next draw does a full repaint.
-    /// Call this after a terminal resize.
     pub fn invalidate(&mut self, cols: u16, rows: u16) {
         self.prev = FrameBuffer::new(rows, cols);
     }
@@ -57,11 +55,8 @@ impl Renderer {
     pub fn draw<W: Write>(&mut self, out: &mut W, manager: &PaneManager) -> Result<()> {
         let mut next = FrameBuffer::new(manager.rows, manager.cols);
 
-        for pane in &manager.panes {
-            paint_pane(&mut next, pane);
-        }
-        paint_border(&mut next, manager.cols, manager.rows);
-        paint_status_bar(&mut next, manager);
+        paint_pane(&mut next, &manager.panes[manager.active]);
+        paint_tab_bar(&mut next, manager);
 
         self.flush_diff(out, &next)?;
         self.prev = next;
@@ -69,13 +64,11 @@ impl Renderer {
     }
 
     fn flush_diff<W: Write>(&self, out: &mut W, next: &FrameBuffer) -> Result<()> {
-        // Track where the terminal cursor is to avoid redundant MoveTo calls.
         let mut cursor: Option<(u16, u16)> = None;
 
         for row in 0..next.rows {
             for col in 0..next.cols {
                 let new_cell = next.get(row, col);
-                // prev may have different dimensions after a resize — treat missing as default.
                 let old_cell = if row < self.prev.rows && col < self.prev.cols {
                     self.prev.get(row, col)
                 } else {
@@ -83,7 +76,7 @@ impl Renderer {
                 };
 
                 if new_cell == old_cell {
-                    cursor = None; // next write will need an explicit MoveTo
+                    cursor = None;
                     continue;
                 }
 
@@ -91,7 +84,6 @@ impl Renderer {
                     queue!(out, cursor::MoveTo(col, row))?;
                 }
                 queue!(out, Print(&new_cell.content))?;
-                // Cursor is now one column to the right.
                 cursor = Some((row, col + 1));
             }
         }
@@ -112,22 +104,24 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane) {
                 }
                 None => " ".to_string(),
             };
-            buf.set(row, pane.col_start + col, content);
+            buf.set(row, col, content);
         }
     }
 }
 
-fn paint_border(buf: &mut FrameBuffer, cols: u16, rows: u16) {
-    let border_col = cols / 2;
-    for row in 0..rows.saturating_sub(1) {
-        buf.set(row, border_col, "│");
-    }
-}
-
-fn paint_status_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
-    let label = format!(" pane {} active ", manager.active + 1);
+fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let row = manager.rows.saturating_sub(1);
-    for (i, ch) in label.chars().enumerate() {
-        buf.set(row, i as u16, ch.to_string());
+    let mut col = 1u16;
+    for (i, _) in manager.panes.iter().enumerate() {
+        let label = if i == manager.active {
+            format!("[*{}]", i + 1)
+        } else {
+            format!("[{}]", i + 1)
+        };
+        for ch in label.chars() {
+            buf.set(row, col, ch.to_string());
+            col += 1;
+        }
+        col += 1; // gap between tabs
     }
 }

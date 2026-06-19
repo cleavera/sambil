@@ -11,13 +11,13 @@ pub struct PaneManager {
 
 impl PaneManager {
     pub fn new(cols: u16, rows: u16) -> Result<Self> {
-        let border_col = cols / 2;
         let pane_height = rows.saturating_sub(1);
-
-        let pane0 = Pane::spawn(0, border_col, pane_height)?;
-        let pane1 = Pane::spawn(border_col + 1, cols - border_col - 1, pane_height)?;
-
-        Ok(PaneManager { panes: vec![pane0, pane1], active: 0, cols, rows })
+        Ok(PaneManager {
+            panes: vec![Pane::spawn(cols, pane_height)?, Pane::spawn(cols, pane_height)?],
+            active: 0,
+            cols,
+            rows,
+        })
     }
 
     pub fn write_active(&mut self, data: &[u8]) -> Result<()> {
@@ -35,15 +35,10 @@ impl PaneManager {
     pub fn resize(&mut self, cols: u16, rows: u16) -> Result<()> {
         self.cols = cols;
         self.rows = rows;
-        let border_col = cols / 2;
         let pane_height = rows.saturating_sub(1);
-
-        self.panes[0].col_start = 0;
-        self.panes[0].resize(border_col, pane_height)?;
-
-        self.panes[1].col_start = border_col + 1;
-        self.panes[1].resize(cols - border_col - 1, pane_height)?;
-
+        for pane in &mut self.panes {
+            pane.resize(cols, pane_height)?;
+        }
         Ok(())
     }
 }
