@@ -30,6 +30,12 @@ impl PaneManager {
         self.panes[self.active].write(data)
     }
 
+    pub fn switch_to(&mut self, index: usize) {
+        if index < self.panes.len() {
+            self.active = index;
+        }
+    }
+
     pub fn switch_to_next(&mut self) {
         self.active = (self.active + 1) % self.panes.len();
     }

@@ -30,6 +30,9 @@ pub fn event_loop<W: Write>(
                     KeyCode::Char('c') => manager.open_tab()?,
                     KeyCode::Char('n') => manager.switch_to_next(),
                     KeyCode::Char('p') => manager.switch_to_prev(),
+                    KeyCode::Char(d @ '1'..='9') => {
+                        manager.switch_to((d as usize) - ('1' as usize));
+                    }
                     _ => {}
                 }
             }
