@@ -3,7 +3,7 @@ mod pane;
 mod pane_manager;
 mod renderer;
 
-use std::io::{self, Write};
+use std::io;
 use std::panic;
 
 use crossterm::{cursor, execute, terminal};
@@ -31,11 +31,9 @@ fn run() -> anyhow::Result<()> {
 
     let (cols, rows) = terminal::size()?;
     let mut manager = pane_manager::PaneManager::new(cols, rows)?;
+    let mut renderer = renderer::Renderer::new(cols, rows);
 
-    renderer::draw(&mut stdout, &manager)?;
-    stdout.flush()?;
-
-    input::event_loop(&mut stdout, &mut manager)?;
+    input::event_loop(&mut stdout, &mut manager, &mut renderer)?;
 
     Ok(())
 }

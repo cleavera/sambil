@@ -5,13 +5,17 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
 use crate::pane_manager::PaneManager;
-use crate::renderer;
+use crate::renderer::Renderer;
 
-pub fn event_loop<W: Write>(out: &mut W, manager: &mut PaneManager) -> Result<()> {
+pub fn event_loop<W: Write>(
+    out: &mut W,
+    manager: &mut PaneManager,
+    renderer: &mut Renderer,
+) -> Result<()> {
     let mut awaiting_command = false;
 
     loop {
-        renderer::draw(out, manager)?;
+        renderer.draw(out, manager)?;
         out.flush()?;
 
         if !event::poll(Duration::from_millis(16))? {
@@ -39,11 +43,13 @@ pub fn event_loop<W: Write>(out: &mut W, manager: &mut PaneManager) -> Result<()
             }
             Event::Resize(cols, rows) => {
                 manager.resize(cols, rows)?;
+                renderer.invalidate(cols, rows);
             }
             _ => {}
         }
     }
 }
+
 
 fn key_to_bytes(code: KeyCode, modifiers: KeyModifiers) -> Option<Vec<u8>> {
     match code {
