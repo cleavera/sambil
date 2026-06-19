@@ -15,6 +15,7 @@ between them.
 | Terminal I/O | `crossterm` | Cross-platform raw mode, input events, ANSI rendering |
 | Pseudo-terminal | `portable-pty` | Cross-platform PTY from the WezTerm project (works on Linux, macOS, Windows) |
 | Async runtime | `tokio` | Non-blocking reads from multiple PTY outputs simultaneously |
+| E2E test harness | `vt100` | Parses ANSI escape codes into a queryable character grid for assertions |
 
 ---
 
@@ -78,9 +79,91 @@ between them.
 | `Ctrl-b p` | Switch to previous pane |
 | `Ctrl-b q` | Quit |
 
+## Testing Strategy — Red/Green E2E
+
+All features are driven by end-to-end tests written **before** their implementation (red), then made
+to pass (green). There are no unit tests for internal components; the external behaviour is the
+contract.
+
+### How it works
+
+Each test spawns `sambil` as a real subprocess inside a PTY, sends input bytes, reads back the
+rendered output, and parses it through `vt100` into a character grid. Assertions query that grid
+by screen region rather than raw escape sequences.
+
+```
+Test
+ │
+ ├─ spawn sambil in a PTY (via portable-pty)
+ │
+ ├─ write input bytes ──► sambil stdin
+ │
+ ├─ read output bytes ◄── sambil stdout
+ │
+ ├─ feed bytes into vt100::Parser → Screen (character grid)
+ │
+ └─ assert on Screen regions (left half, right half, status bar)
+```
+
+### `TestSession` helper
+
+A shared test helper wraps all of the above:
+
+```rust
+let mut session = TestSession::spawn(cols: 80, rows: 24);
+
+session.send_str("echo hello\n");
+session.wait_for_text("hello", timeout);   // polls vt100 screen until text appears
+
+session.send_keys(&[ctrl_b(), b'n']);      // switch pane
+
+let screen = session.screen();
+assert!(screen.region(left_half).contains("hello"));
+assert!(!screen.region(right_half).contains("hello"));
+```
+
+`wait_for_text` polls with a short sleep rather than asserting immediately, handling the async
+nature of PTY output. Tests fail with a timeout error if the expected text never appears.
+
+### Pitfalls and mitigations
+
+| Pitfall | Mitigation |
+|---|---|
+| Shell prompt varies per machine | Assert only on command output, not prompt text |
+| PTY output is async | All assertions use `wait_for_text(timeout)` not instant reads |
+| Windows PTY differences | CI runs Linux/macOS for MVP; Windows support validated manually |
+| Flaky timing | Generous but finite timeouts (e.g. 2s); fail fast with clear messages |
+
+### Test file structure
+
+```
+tests/
+  common/
+    mod.rs         — TestSession, Screen helpers, key constants
+  e2e_startup.rs   — sambil launches and renders two panes
+  e2e_input.rs     — typing in a pane produces output in that pane
+  e2e_switching.rs — pane switching routes input to the correct shell
+  e2e_quit.rs      — Ctrl-b q exits cleanly and restores the terminal
+```
+
+### Red/green workflow per phase
+
+For each implementation phase:
+1. Write the e2e test(s) — they must **fail** (red) before any code is written
+2. Implement the minimum code to make them pass (green)
+3. Refactor if needed, keeping tests green
+
 ---
 
 ## MVP Implementation Phases
+
+Each phase follows red/green: write the failing test first, then implement.
+
+### Phase 0 — Test harness
+- Add `vt100` and `portable-pty` as dev-dependencies
+- Implement `TestSession` in `tests/common/mod.rs`
+- Implement `Screen` region helpers and `wait_for_text`
+- Verify the harness itself can spawn a plain `cat` process and assert on its output
 
 ### Phase 1 — Project scaffold & dependencies
 - Add `crossterm`, `portable-pty`, and `tokio` to `Cargo.toml`
@@ -127,6 +210,14 @@ src/
   pane_manager.rs  — owns Vec<Pane>, active index, spawn/teardown
   input.rs         — InputRouter, key binding detection
   renderer.rs      — terminal drawing, layout calculation
+
+tests/
+  common/
+    mod.rs         — TestSession, Screen region helpers, key constants
+  e2e_startup.rs   — sambil launches and renders two panes
+  e2e_input.rs     — typing in a pane produces output in that pane
+  e2e_switching.rs — pane switching routes input to the correct shell
+  e2e_quit.rs      — Ctrl-b q exits cleanly and restores the terminal
 ```
 
 ---
