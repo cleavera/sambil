@@ -13,11 +13,17 @@ impl PaneManager {
     pub fn new(cols: u16, rows: u16) -> Result<Self> {
         let pane_height = rows.saturating_sub(1);
         Ok(PaneManager {
-            panes: vec![Pane::spawn(cols, pane_height)?, Pane::spawn(cols, pane_height)?],
+            panes: vec![Pane::spawn(cols, pane_height)?],
             active: 0,
             cols,
             rows,
         })
+    }
+
+    pub fn open_tab(&mut self) -> Result<()> {
+        self.panes.push(Pane::spawn(self.cols, self.rows.saturating_sub(1))?);
+        self.active = self.panes.len() - 1;
+        Ok(())
     }
 
     pub fn write_active(&mut self, data: &[u8]) -> Result<()> {

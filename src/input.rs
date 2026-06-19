@@ -27,6 +27,7 @@ pub fn event_loop<W: Write>(
                 awaiting_command = false;
                 match key.code {
                     KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Char('c') => manager.open_tab()?,
                     KeyCode::Char('n') => manager.switch_to_next(),
                     KeyCode::Char('p') => manager.switch_to_prev(),
                     _ => {}

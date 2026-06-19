@@ -34,8 +34,8 @@ fn switching_tabs_shows_correct_content() {
     session.send_str("echo tab1_marker\n");
     assert!(session.wait_for_text("tab1_marker", Duration::from_secs(2)), "tab 1 output did not appear");
 
-    // Switch to tab 2
-    session.send_keys(&[CTRL_B, b'n']);
+    // Open a new tab
+    session.send_keys(&[CTRL_B, b'c']);
     assert!(
         session.wait_for_text("[*2]", Duration::from_secs(2)),
         "Tab 2 did not become active\n---\n{}\n---",
