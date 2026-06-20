@@ -24,6 +24,18 @@ impl PaneManager {
         })
     }
 
+    /// Closes the active tab. Returns `true` if it was the last tab (caller should quit).
+    pub fn close_active_tab(&mut self) -> bool {
+        if self.panes.len() == 1 {
+            return true;
+        }
+        self.panes.remove(self.active);
+        if self.active >= self.panes.len() {
+            self.active = self.panes.len() - 1;
+        }
+        false
+    }
+
     pub fn open_tab(&mut self, name: String) -> Result<()> {
         let cwd = self.active_cwd();
         self.panes.push(Pane::spawn(name, &cwd, self.cols, self.rows.saturating_sub(1))?);

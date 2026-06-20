@@ -60,6 +60,11 @@ fn handle_key(
     match mode {
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
+            KeyCode::Char('x') => {
+                if manager.close_active_tab() {
+                    return Ok(InputMode::Quit);
+                }
+            }
             KeyCode::Char('c') => {
                 manager.open_tab(manager.active_cwd_name())?;
                 return Ok(InputMode::Normal);

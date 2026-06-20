@@ -73,6 +73,29 @@ impl TestSession {
         false
     }
 
+    pub fn wait_for_no_text(&self, text: &str, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if !self.screen().contains(text) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
+    /// Polls until any cell with content `ch` has foreground colour `fg`.
+    pub fn wait_for_char_with_fg(&self, ch: char, fg: vt100::Color, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if self.screen().has_char_with_fg(ch, fg) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
     pub fn screen(&self) -> Screen {
         let parser = self.parser.lock().unwrap();
         Screen::capture(parser.screen())
@@ -98,27 +121,44 @@ pub struct Screen {
     rows: u16,
     cols: u16,
     cells: Vec<String>,
+    fg_colors: Vec<vt100::Color>,
 }
 
 impl Screen {
     fn capture(screen: &vt100::Screen) -> Self {
         let (rows, cols) = screen.size();
         let mut cells = Vec::with_capacity((rows * cols) as usize);
+        let mut fg_colors = Vec::with_capacity((rows * cols) as usize);
         for row in 0..rows {
             for col in 0..cols {
-                cells.push(
-                    screen
-                        .cell(row, col)
-                        .map(|c| c.contents().to_string())
-                        .unwrap_or_default(),
-                );
+                match screen.cell(row, col) {
+                    Some(c) => {
+                        cells.push(c.contents().to_string());
+                        fg_colors.push(c.fgcolor());
+                    }
+                    None => {
+                        cells.push(String::new());
+                        fg_colors.push(vt100::Color::Default);
+                    }
+                }
             }
         }
-        Screen { rows, cols, cells }
+        Screen { rows, cols, cells, fg_colors }
     }
 
     pub fn contains(&self, text: &str) -> bool {
         self.full_text().contains(text)
+    }
+
+    /// Returns true if any cell contains `ch` with exactly `fg` as its foreground colour.
+    pub fn has_char_with_fg(&self, ch: char, fg: vt100::Color) -> bool {
+        let ch_str = ch.to_string();
+        for i in 0..(self.rows * self.cols) as usize {
+            if self.cells[i] == ch_str && self.fg_colors[i] == fg {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn left_half(&self) -> String {

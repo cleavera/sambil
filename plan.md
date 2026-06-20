@@ -75,9 +75,69 @@ between them.
 
 | Key | Action |
 |---|---|
-| `Ctrl-b n` | Switch to next pane |
-| `Ctrl-b p` | Switch to previous pane |
+| `Ctrl-b n` | Switch to next tab |
+| `Ctrl-b p` | Switch to previous tab |
+| `Ctrl-b 1`–`9` | Switch directly to tab N |
+| `Ctrl-b c` | Open new tab (named after cwd) |
+| `Ctrl-b C` | Open new tab (prompt for name) |
+| `Ctrl-b x` | Close active tab (exits if last) |
+| `Ctrl-b r` | Rename active tab |
 | `Ctrl-b q` | Quit |
+
+---
+
+## Completed Features
+
+- [x] Phase 0: Test harness (`TestSession`, `Screen`, `wait_for_text`, `wait_for_no_text`)
+- [x] Phase 1: Project scaffold, raw mode, panic-safe terminal restore
+- [x] Phase 2: PTY shell spawning, async output reader threads, cwd inheritance
+- [x] Phase 3: Diff renderer (double-buffer, no flicker), tab bar with names
+- [x] Phase 4: Input routing, `key_to_bytes`, arrow/ctrl keys
+- [x] Phase 5: Tab switching (n/p/1–9), open (c/C), close (x), rename (r), quit (q)
+- [x] Tab naming: cwd on creation, optional prompt, rename flow
+
+---
+
+## Next Phases
+
+### Phase 7 — Colour fidelity
+The PTY is not advertising full colour support to child processes, causing tools like `gitui` and
+`ls --color` to produce fewer colours than expected. The fix is to set the `TERM` and `COLORTERM`
+environment variables on the spawned shell to advertise 24-bit (truecolour) support, and ensure
+the renderer emits the full SGR colour sequences from the `vt100` cell attributes rather than
+approximating them.
+
+Red/green: test that a child process which emits a known truecolour escape sequence has that colour
+faithfully reproduced in the rendered output.
+
+### Phase 8 — Shell exit handling
+When the shell inside a tab exits (e.g. the user types `exit`), the pane becomes silently dead —
+input is ignored and no new output arrives. The correct behaviour is to automatically close the tab
+when its shell exits, the same way `Ctrl-b x` does (exiting sambil if it was the last tab).
+
+Implementation: the output-reader thread detects EOF on the PTY master and sends a signal back to
+the main event loop (e.g. via a channel) to trigger tab close.
+
+Red/green: test that typing `exit\n` in a tab causes that tab to disappear from the tab bar (or
+sambil to exit if it was the only tab).
+
+### Phase 9 — Scrollback
+Add a fixed-size scrollback buffer per pane (e.g. 1000 lines beyond the visible viewport). A new
+`ScrollBack` input mode (entered with `Ctrl-b [`), navigated with arrow keys or Page Up/Down,
+and exited with `q` or `Escape`. The renderer shows a scrollback indicator in the status bar when
+not at the bottom.
+
+Red/green: test that output scrolled off the top of the screen is accessible in scroll mode.
+
+### Phase 10 — Paste & bracketed paste
+Negotiate bracketed paste mode with the PTY so that pasted text is wrapped in `\e[200~` / `\e[201~`
+escape sequences. This prevents shells and editors from misinterpreting pasted newlines as command
+executions. Also handle large pastes without overflowing the PTY write buffer.
+
+Red/green: test that text sent via a simulated paste is received by the shell wrapped in the
+bracketed paste markers.
+
+---
 
 ## Testing Strategy — Red/Green E2E
 
