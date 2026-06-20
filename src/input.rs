@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
-use crate::pane_manager::{cwd_name, PaneManager};
+use crate::pane_manager::PaneManager;
 use crate::renderer::Renderer;
 
 enum InputMode {
@@ -61,7 +61,7 @@ fn handle_key(
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
             KeyCode::Char('c') => {
-                manager.open_tab(cwd_name())?;
+                manager.open_tab(manager.active_cwd_name())?;
                 return Ok(InputMode::Normal);
             }
             KeyCode::Char('C') => return Ok(InputMode::Naming(String::new())),
@@ -79,7 +79,7 @@ fn handle_key(
 
         InputMode::Naming(mut buf) => match code {
             KeyCode::Enter => {
-                let name = if buf.is_empty() { cwd_name() } else { buf };
+                let name = if buf.is_empty() { manager.active_cwd_name() } else { buf };
                 manager.open_tab(name)?;
                 return Ok(InputMode::Normal);
             }
@@ -97,7 +97,7 @@ fn handle_key(
 
         InputMode::Renaming(mut buf) => match code {
             KeyCode::Enter => {
-                let name = if buf.is_empty() { cwd_name() } else { buf };
+                let name = if buf.is_empty() { manager.active_cwd_name() } else { buf };
                 manager.rename_active(name);
                 return Ok(InputMode::Normal);
             }

@@ -10,12 +10,13 @@ pub struct Pane {
     pub height: u16,
     writer: Box<dyn Write + Send>,
     pub parser: Arc<Mutex<vt100::Parser>>,
+    pub child_pid: Option<u32>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     master: Box<dyn portable_pty::MasterPty + Send>,
 }
 
 impl Pane {
-    pub fn spawn(name: String, width: u16, height: u16) -> Result<Self> {
+    pub fn spawn(name: String, cwd: &std::path::Path, width: u16, height: u16) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows: height,
@@ -25,8 +26,10 @@ impl Pane {
         })?;
 
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        let cmd = CommandBuilder::new(&shell);
+        let mut cmd = CommandBuilder::new(&shell);
+        cmd.cwd(cwd);
         let child = pair.slave.spawn_command(cmd)?;
+        let child_pid = child.process_id();
 
         let writer = pair.master.take_writer()?;
         let mut reader = pair.master.try_clone_reader()?;
@@ -46,7 +49,7 @@ impl Pane {
             }
         });
 
-        Ok(Pane { name, width, height, writer, parser, _child: child, master: pair.master })
+        Ok(Pane { name, width, height, writer, parser, child_pid, _child: child, master: pair.master })
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<()> {

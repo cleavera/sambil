@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::Result;
 
 use crate::pane::Pane;
@@ -12,8 +14,10 @@ pub struct PaneManager {
 impl PaneManager {
     pub fn new(cols: u16, rows: u16) -> Result<Self> {
         let pane_height = rows.saturating_sub(1);
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+        let name = path_basename(&cwd);
         Ok(PaneManager {
-            panes: vec![Pane::spawn(cwd_name(), cols, pane_height)?],
+            panes: vec![Pane::spawn(name, &cwd, cols, pane_height)?],
             active: 0,
             cols,
             rows,
@@ -21,9 +25,24 @@ impl PaneManager {
     }
 
     pub fn open_tab(&mut self, name: String) -> Result<()> {
-        self.panes.push(Pane::spawn(name, self.cols, self.rows.saturating_sub(1))?);
+        let cwd = self.active_cwd();
+        self.panes.push(Pane::spawn(name, &cwd, self.cols, self.rows.saturating_sub(1))?);
         self.active = self.panes.len() - 1;
         Ok(())
+    }
+
+    pub fn active_cwd(&self) -> PathBuf {
+        #[cfg(target_os = "linux")]
+        if let Some(pid) = self.panes[self.active].child_pid {
+            if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                return path;
+            }
+        }
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
+    }
+
+    pub fn active_cwd_name(&self) -> String {
+        path_basename(&self.active_cwd())
     }
 
     pub fn rename_active(&mut self, name: String) {
@@ -63,9 +82,8 @@ impl PaneManager {
     }
 }
 
-pub fn cwd_name() -> String {
-    std::env::current_dir()
-        .ok()
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+pub fn path_basename(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "shell".to_string())
 }
