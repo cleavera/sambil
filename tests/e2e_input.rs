@@ -10,7 +10,7 @@ fn typing_in_active_tab_shows_output() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
     assert!(
-        session.wait_for_text("[*1]", Duration::from_secs(2)),
+        session.wait_for_text("[*1:", Duration::from_secs(2)),
         "sambil did not render tab bar"
     );
 
@@ -29,15 +29,18 @@ fn typing_in_active_tab_shows_output() {
 fn switching_tabs_shows_correct_content() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1]", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_str("echo tab1_marker\n");
     assert!(session.wait_for_text("tab1_marker", Duration::from_secs(2)), "tab 1 output did not appear");
 
-    // Open a new tab
+    // Open a new tab with empty name (uses cwd)
     session.send_keys(&[CTRL_B, b'c']);
+    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
+    session.send_str("\r");
+
     assert!(
-        session.wait_for_text("[*2]", Duration::from_secs(2)),
+        session.wait_for_text("[*2:", Duration::from_secs(2)),
         "Tab 2 did not become active\n---\n{}\n---",
         session.screen().full_text()
     );

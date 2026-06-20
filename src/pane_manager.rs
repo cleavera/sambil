@@ -13,15 +13,15 @@ impl PaneManager {
     pub fn new(cols: u16, rows: u16) -> Result<Self> {
         let pane_height = rows.saturating_sub(1);
         Ok(PaneManager {
-            panes: vec![Pane::spawn(cols, pane_height)?],
+            panes: vec![Pane::spawn(cwd_name(), cols, pane_height)?],
             active: 0,
             cols,
             rows,
         })
     }
 
-    pub fn open_tab(&mut self) -> Result<()> {
-        self.panes.push(Pane::spawn(self.cols, self.rows.saturating_sub(1))?);
+    pub fn open_tab(&mut self, name: String) -> Result<()> {
+        self.panes.push(Pane::spawn(name, self.cols, self.rows.saturating_sub(1))?);
         self.active = self.panes.len() - 1;
         Ok(())
     }
@@ -53,4 +53,11 @@ impl PaneManager {
         }
         Ok(())
     }
+}
+
+pub fn cwd_name() -> String {
+    std::env::current_dir()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "shell".to_string())
 }

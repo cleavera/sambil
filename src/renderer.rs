@@ -52,11 +52,19 @@ impl Renderer {
         self.prev = FrameBuffer::new(rows, cols);
     }
 
-    pub fn draw<W: Write>(&mut self, out: &mut W, manager: &PaneManager) -> Result<()> {
+    pub fn draw<W: Write>(
+        &mut self,
+        out: &mut W,
+        manager: &PaneManager,
+        prompt: Option<&str>,
+    ) -> Result<()> {
         let mut next = FrameBuffer::new(manager.rows, manager.cols);
 
         paint_pane(&mut next, &manager.panes[manager.active]);
-        paint_tab_bar(&mut next, manager);
+        match prompt {
+            Some(text) => paint_prompt(&mut next, manager, text),
+            None => paint_tab_bar(&mut next, manager),
+        }
 
         self.flush_diff(out, &next)?;
         self.prev = next;
@@ -112,16 +120,24 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane) {
 fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let row = manager.rows.saturating_sub(1);
     let mut col = 1u16;
-    for (i, _) in manager.panes.iter().enumerate() {
+    for (i, pane) in manager.panes.iter().enumerate() {
         let label = if i == manager.active {
-            format!("[*{}]", i + 1)
+            format!("[*{}:{}]", i + 1, pane.name)
         } else {
-            format!("[{}]", i + 1)
+            format!("[{}:{}]", i + 1, pane.name)
         };
         for ch in label.chars() {
             buf.set(row, col, ch.to_string());
             col += 1;
         }
-        col += 1; // gap between tabs
+        col += 1;
+    }
+}
+
+fn paint_prompt(buf: &mut FrameBuffer, manager: &PaneManager, input: &str) {
+    let row = manager.rows.saturating_sub(1);
+    let prompt = format!("New tab name: {}_", input);
+    for (col, ch) in prompt.chars().enumerate() {
+        buf.set(row, col as u16, ch.to_string());
     }
 }

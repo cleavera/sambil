@@ -5,6 +5,7 @@ use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
 pub struct Pane {
+    pub name: String,
     pub width: u16,
     pub height: u16,
     writer: Box<dyn Write + Send>,
@@ -14,7 +15,7 @@ pub struct Pane {
 }
 
 impl Pane {
-    pub fn spawn(width: u16, height: u16) -> Result<Self> {
+    pub fn spawn(name: String, width: u16, height: u16) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows: height,
@@ -45,7 +46,7 @@ impl Pane {
             }
         });
 
-        Ok(Pane { width, height, writer, parser, _child: child, master: pair.master })
+        Ok(Pane { name, width, height, writer, parser, _child: child, master: pair.master })
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<()> {

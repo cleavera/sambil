@@ -10,7 +10,7 @@ fn ctrl_b_q_exits_cleanly() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
     assert!(
-        session.wait_for_text("[*1]", Duration::from_secs(2)),
+        session.wait_for_text("[*1:", Duration::from_secs(2)),
         "sambil did not render before quit attempt"
     );
 

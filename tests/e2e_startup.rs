@@ -9,13 +9,13 @@ use common::TestSession;
 fn startup_renders_tab_bar() {
     let session = TestSession::spawn_sambil(80, 24);
     assert!(
-        session.wait_for_text("[*1]", Duration::from_secs(2)),
-        "Expected tab bar with active tab '[*1]'\n---\n{}\n---",
+        session.wait_for_text("[*1:", Duration::from_secs(2)),
+        "Expected tab bar with active tab '[*1:name]'\n---\n{}\n---",
         session.screen().full_text()
     );
-    // Only one tab at startup — no [2] yet
+    // Only one tab at startup — no [2: yet
     assert!(
-        !session.screen().contains("[2]"),
+        !session.screen().contains("[2:"),
         "Expected only one tab at startup\n---\n{}\n---",
         session.screen().full_text()
     );
