@@ -13,13 +13,9 @@ fn ctrl_b_number_switches_directly_to_tab() {
 
     // Open two more tabs so we have 1, 2, 3
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
-    session.send_str("\r");
     assert!(session.wait_for_text("[*2:", Duration::from_secs(2)), "tab 2 did not open");
 
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
-    session.send_str("\r");
     assert!(session.wait_for_text("[*3:", Duration::from_secs(2)), "tab 3 did not open");
 
     // Jump directly back to tab 1

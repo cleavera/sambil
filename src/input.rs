@@ -60,7 +60,11 @@ fn handle_key(
     match mode {
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
-            KeyCode::Char('c') => return Ok(InputMode::Naming(String::new())),
+            KeyCode::Char('c') => {
+                manager.open_tab(cwd_name())?;
+                return Ok(InputMode::Normal);
+            }
+            KeyCode::Char('C') => return Ok(InputMode::Naming(String::new())),
             KeyCode::Char('r') => {
                 let current = manager.active_name().to_string();
                 return Ok(InputMode::Renaming(current));

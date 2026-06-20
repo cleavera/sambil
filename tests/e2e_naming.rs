@@ -4,13 +4,39 @@ use std::time::Duration;
 
 use common::{TestSession, CTRL_B};
 
-/// After Ctrl-b c, a naming prompt should appear in the status bar.
+/// Ctrl-b c opens instantly with the cwd name — no prompt shown.
 #[test]
-fn ctrl_b_c_shows_naming_prompt() {
+fn ctrl_b_c_opens_with_cwd_name_instantly() {
     let mut session = TestSession::spawn_sambil(80, 24);
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'c']);
+
+    assert!(
+        session.wait_for_text("[*2:", Duration::from_secs(2)),
+        "Expected new tab to open immediately\n---\n{}\n---",
+        session.screen().full_text()
+    );
+    assert!(
+        !session.screen().contains("New tab name:"),
+        "Ctrl-b c should not show a prompt\n---\n{}\n---",
+        session.screen().full_text()
+    );
+    // Name should be non-empty (cwd basename)
+    assert!(
+        !session.screen().contains("[*2:]"),
+        "Tab name should not be empty\n---\n{}\n---",
+        session.screen().full_text()
+    );
+}
+
+/// Ctrl-b C (uppercase) shows a naming prompt before opening the tab.
+#[test]
+fn ctrl_b_shift_c_shows_naming_prompt() {
+    let mut session = TestSession::spawn_sambil(80, 24);
+    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+
+    session.send_keys(&[CTRL_B, b'C']);
 
     assert!(
         session.wait_for_text("New tab name:", Duration::from_secs(2)),
@@ -25,7 +51,7 @@ fn named_tab_shows_name_in_tab_bar() {
     let mut session = TestSession::spawn_sambil(80, 24);
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
 
     session.send_str("myproject\r");
@@ -43,19 +69,16 @@ fn empty_name_uses_cwd_basename() {
     let mut session = TestSession::spawn_sambil(80, 24);
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
 
-    // Confirm with empty input
     session.send_str("\r");
 
-    // The new tab should appear with some non-empty name derived from cwd
     assert!(
         session.wait_for_text("[*2:", Duration::from_secs(2)),
         "Expected new tab with cwd name\n---\n{}\n---",
         session.screen().full_text()
     );
-    // The name should not be empty (just `[*2:]`)
     assert!(
         !session.screen().contains("[*2:]"),
         "Tab name should not be empty — expected cwd basename\n---\n{}\n---",
@@ -69,10 +92,10 @@ fn esc_cancels_naming() {
     let mut session = TestSession::spawn_sambil(80, 24);
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
 
-    session.send_keys(&[0x1b]); // Esc
+    session.send_keys(&[0x1b]);
 
     std::thread::sleep(Duration::from_millis(150));
     let screen = session.screen();

@@ -11,7 +11,7 @@ fn ctrl_b_r_shows_rename_prompt_with_current_name() {
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
     // Open a named tab so we have a predictable name to check
-    session.send_keys(&[CTRL_B, b'c']);
+    session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
     session.send_str("original\r");
     assert!(session.wait_for_text("[*2:original]", Duration::from_secs(2)), "named tab did not open");
@@ -36,7 +36,7 @@ fn rename_updates_tab_bar() {
     let mut session = TestSession::spawn_sambil(80, 24);
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
     session.send_str("original\r");
     assert!(session.wait_for_text("[*2:original]", Duration::from_secs(2)), "named tab did not open");
@@ -68,7 +68,7 @@ fn esc_cancels_rename() {
     let mut session = TestSession::spawn_sambil(80, 24);
     assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
     session.send_str("keepme\r");
     assert!(session.wait_for_text("[*2:keepme]", Duration::from_secs(2)), "named tab did not open");
