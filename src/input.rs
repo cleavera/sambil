@@ -11,6 +11,7 @@ enum InputMode {
     Normal,
     AwaitingCommand,
     Naming(String),
+    Renaming(String),
     Quit,
 }
 
@@ -23,10 +24,11 @@ pub fn event_loop<W: Write>(
 
     loop {
         let prompt = match &mode {
-            InputMode::Naming(buf) => Some(buf.as_str()),
+            InputMode::Naming(buf) => Some(format!("New tab name: {}_", buf)),
+            InputMode::Renaming(buf) => Some(format!("Rename tab: {}_", buf)),
             _ => None,
         };
-        renderer.draw(out, manager, prompt)?;
+        renderer.draw(out, manager, prompt.as_deref())?;
         out.flush()?;
 
         if !event::poll(Duration::from_millis(16))? {
@@ -59,6 +61,10 @@ fn handle_key(
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
             KeyCode::Char('c') => return Ok(InputMode::Naming(String::new())),
+            KeyCode::Char('r') => {
+                let current = manager.active_name().to_string();
+                return Ok(InputMode::Renaming(current));
+            }
             KeyCode::Char('n') => manager.switch_to_next(),
             KeyCode::Char('p') => manager.switch_to_prev(),
             KeyCode::Char(d @ '1'..='9') => {
@@ -83,6 +89,24 @@ fn handle_key(
                 return Ok(InputMode::Naming(buf));
             }
             _ => return Ok(InputMode::Naming(buf)),
+        },
+
+        InputMode::Renaming(mut buf) => match code {
+            KeyCode::Enter => {
+                let name = if buf.is_empty() { cwd_name() } else { buf };
+                manager.rename_active(name);
+                return Ok(InputMode::Normal);
+            }
+            KeyCode::Esc => return Ok(InputMode::Normal),
+            KeyCode::Backspace => {
+                buf.pop();
+                return Ok(InputMode::Renaming(buf));
+            }
+            KeyCode::Char(c) if !modifiers.contains(KeyModifiers::CONTROL) => {
+                buf.push(c);
+                return Ok(InputMode::Renaming(buf));
+            }
+            _ => return Ok(InputMode::Renaming(buf)),
         },
 
         InputMode::Normal => {

@@ -134,10 +134,9 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     }
 }
 
-fn paint_prompt(buf: &mut FrameBuffer, manager: &PaneManager, input: &str) {
+fn paint_prompt(buf: &mut FrameBuffer, manager: &PaneManager, text: &str) {
     let row = manager.rows.saturating_sub(1);
-    let prompt = format!("New tab name: {}_", input);
-    for (col, ch) in prompt.chars().enumerate() {
+    for (col, ch) in text.chars().enumerate() {
         buf.set(row, col as u16, ch.to_string());
     }
 }

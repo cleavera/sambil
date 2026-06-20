@@ -26,6 +26,14 @@ impl PaneManager {
         Ok(())
     }
 
+    pub fn rename_active(&mut self, name: String) {
+        self.panes[self.active].name = name;
+    }
+
+    pub fn active_name(&self) -> &str {
+        &self.panes[self.active].name
+    }
+
     pub fn write_active(&mut self, data: &[u8]) -> Result<()> {
         self.panes[self.active].write(data)
     }
