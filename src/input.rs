@@ -12,6 +12,7 @@ enum InputMode {
     AwaitingCommand,
     Naming(String),
     Renaming(String),
+    ScrollBack(usize),
     Quit,
 }
 
@@ -26,9 +27,16 @@ pub fn event_loop<W: Write>(
         let prompt = match &mode {
             InputMode::Naming(buf) => Some(format!("New tab name: {}_", buf)),
             InputMode::Renaming(buf) => Some(format!("Rename tab: {}_", buf)),
+            InputMode::ScrollBack(_) => {
+                Some("-- SCROLL -- (↑↓/PgUp/PgDn, q/Esc to exit)".to_string())
+            }
             _ => None,
         };
-        renderer.draw(out, manager, prompt.as_deref())?;
+        let scroll_offset = match &mode {
+            InputMode::ScrollBack(n) => *n,
+            _ => 0,
+        };
+        renderer.draw(out, manager, prompt.as_deref(), scroll_offset)?;
         out.flush()?;
 
         if !event::poll(Duration::from_millis(16))? {
@@ -77,6 +85,7 @@ fn handle_key(
                 let current = manager.active_name().to_string();
                 return Ok(InputMode::Renaming(current));
             }
+            KeyCode::Char('[') => return Ok(InputMode::ScrollBack(0)),
             KeyCode::Char('n') => manager.switch_to_next(),
             KeyCode::Char('p') => manager.switch_to_prev(),
             KeyCode::Char(d @ '1'..='9') => {
@@ -120,6 +129,20 @@ fn handle_key(
             }
             _ => return Ok(InputMode::Renaming(buf)),
         },
+
+        InputMode::ScrollBack(offset) => {
+            let page = manager.rows.saturating_sub(1) as usize;
+            match code {
+                KeyCode::Up => return Ok(InputMode::ScrollBack(offset + 1)),
+                KeyCode::Down => return Ok(InputMode::ScrollBack(offset.saturating_sub(1))),
+                KeyCode::PageUp => return Ok(InputMode::ScrollBack(offset + page)),
+                KeyCode::PageDown => {
+                    return Ok(InputMode::ScrollBack(offset.saturating_sub(page)));
+                }
+                KeyCode::Char('q') | KeyCode::Esc => return Ok(InputMode::Normal),
+                _ => return Ok(InputMode::ScrollBack(offset)),
+            }
+        }
 
         InputMode::Normal => {
             if code == KeyCode::Char('b') && modifiers.contains(KeyModifiers::CONTROL) {

@@ -188,3 +188,7 @@ impl Screen {
 pub const CTRL_B: u8 = 0x02;
 pub const CTRL_C: u8 = 0x03;
 pub const CTRL_D: u8 = 0x04;
+pub const UP_ARROW: &[u8] = b"\x1b[A";
+pub const DOWN_ARROW: &[u8] = b"\x1b[B";
+pub const PAGE_UP: &[u8] = b"\x1b[5~";
+pub const PAGE_DOWN: &[u8] = b"\x1b[6~";

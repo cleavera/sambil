@@ -77,10 +77,11 @@ impl Renderer {
         out: &mut W,
         manager: &PaneManager,
         prompt: Option<&str>,
+        scroll_offset: usize,
     ) -> Result<()> {
         let mut next = FrameBuffer::new(manager.rows, manager.cols);
 
-        paint_pane(&mut next, &manager.panes[manager.active]);
+        paint_pane(&mut next, &manager.panes[manager.active], scroll_offset);
         match prompt {
             Some(text) => paint_prompt(&mut next, manager, text),
             None => paint_tab_bar(&mut next, manager),
@@ -159,32 +160,36 @@ fn vt100_color_to_crossterm(color: vt100::Color) -> Color {
     }
 }
 
-fn paint_pane(buf: &mut FrameBuffer, pane: &Pane) {
-    let parser = pane.parser.lock().unwrap();
-    let screen = parser.screen();
-    for row in 0..pane.height {
-        for col in 0..pane.width {
-            let cell = match screen.cell(row, col) {
-                Some(c) if c.is_wide_continuation() => Cell::default(),
-                Some(c) => {
-                    let s = c.contents();
-                    let content =
-                        if s.is_empty() { " ".to_string() } else { s.to_string() };
-                    let attrs = Attrs {
-                        fg: c.fgcolor(),
-                        bg: c.bgcolor(),
-                        bold: c.bold(),
-                        italic: c.italic(),
-                        underline: c.underline(),
-                        inverse: c.inverse(),
-                    };
-                    Cell { content, attrs }
-                }
-                None => Cell::default(),
-            };
-            buf.set(row, col, cell);
+fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
+    let mut parser = pane.parser.lock().unwrap();
+    parser.screen_mut().set_scrollback(scroll_offset);
+    {
+        let screen = parser.screen();
+        for row in 0..pane.height {
+            for col in 0..pane.width {
+                let cell = match screen.cell(row, col) {
+                    Some(c) if c.is_wide_continuation() => Cell::default(),
+                    Some(c) => {
+                        let s = c.contents();
+                        let content =
+                            if s.is_empty() { " ".to_string() } else { s.to_string() };
+                        let attrs = Attrs {
+                            fg: c.fgcolor(),
+                            bg: c.bgcolor(),
+                            bold: c.bold(),
+                            italic: c.italic(),
+                            underline: c.underline(),
+                            inverse: c.inverse(),
+                        };
+                        Cell { content, attrs }
+                    }
+                    None => Cell::default(),
+                };
+                buf.set(row, col, cell);
+            }
         }
     }
+    parser.screen_mut().set_scrollback(0);
 }
 
 fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {

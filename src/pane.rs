@@ -38,7 +38,7 @@ impl Pane {
         let writer = pair.master.take_writer()?;
         let mut reader = pair.master.try_clone_reader()?;
 
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(height, width, 0)));
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(height, width, 1000)));
         let parser_clone = Arc::clone(&parser);
         let exited = Arc::new(AtomicBool::new(false));
         let exited_clone = Arc::clone(&exited);
