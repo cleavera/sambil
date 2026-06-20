@@ -32,6 +32,9 @@ pub fn event_loop<W: Write>(
         out.flush()?;
 
         if !event::poll(Duration::from_millis(16))? {
+            if manager.close_exited_tabs() {
+                return Ok(());
+            }
             continue;
         }
 

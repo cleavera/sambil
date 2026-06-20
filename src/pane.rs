@@ -1,4 +1,5 @@
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
@@ -11,6 +12,7 @@ pub struct Pane {
     writer: Box<dyn Write + Send>,
     pub parser: Arc<Mutex<vt100::Parser>>,
     pub child_pid: Option<u32>,
+    pub exited: Arc<AtomicBool>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     master: Box<dyn portable_pty::MasterPty + Send>,
 }
@@ -38,6 +40,8 @@ impl Pane {
 
         let parser = Arc::new(Mutex::new(vt100::Parser::new(height, width, 0)));
         let parser_clone = Arc::clone(&parser);
+        let exited = Arc::new(AtomicBool::new(false));
+        let exited_clone = Arc::clone(&exited);
 
         std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
@@ -49,9 +53,10 @@ impl Pane {
                     }
                 }
             }
+            exited_clone.store(true, Ordering::Relaxed);
         });
 
-        Ok(Pane { name, width, height, writer, parser, child_pid, _child: child, master: pair.master })
+        Ok(Pane { name, width, height, writer, parser, child_pid, exited, _child: child, master: pair.master })
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<()> {

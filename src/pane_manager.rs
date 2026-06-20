@@ -24,6 +24,27 @@ impl PaneManager {
         })
     }
 
+    /// Closes any tabs whose shell has exited. Returns `true` if no tabs remain.
+    pub fn close_exited_tabs(&mut self) -> bool {
+        let mut i = 0;
+        while i < self.panes.len() {
+            if self.panes[i].exited.load(std::sync::atomic::Ordering::Relaxed) {
+                if self.panes.len() == 1 {
+                    return true;
+                }
+                self.panes.remove(i);
+                if self.active >= self.panes.len() {
+                    self.active = self.panes.len() - 1;
+                } else if self.active > i {
+                    self.active -= 1;
+                }
+            } else {
+                i += 1;
+            }
+        }
+        false
+    }
+
     /// Closes the active tab. Returns `true` if it was the last tab (caller should quit).
     pub fn close_active_tab(&mut self) -> bool {
         if self.panes.len() == 1 {
