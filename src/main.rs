@@ -24,6 +24,10 @@ fn main() {
 }
 
 fn run() -> anyhow::Result<()> {
+    if std::env::var("SAMBIL").is_ok() {
+        anyhow::bail!("already inside a sambil session (set by $SAMBIL)");
+    }
+
     let mut stdout = io::stdout();
 
     terminal::enable_raw_mode()?;

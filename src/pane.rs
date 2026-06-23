@@ -32,6 +32,7 @@ impl Pane {
         cmd.cwd(cwd);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
+        cmd.env("SAMBIL", "1");
         let child = pair.slave.spawn_command(cmd)?;
         let child_pid = child.process_id();
 
