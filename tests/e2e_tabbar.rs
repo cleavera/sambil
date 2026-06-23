@@ -11,8 +11,8 @@ fn active_tab_has_highlighted_background() {
     let session = TestSession::spawn_sambil(80, 24);
 
     assert!(
-        session.wait_for_char_with_bg('●', vt100::Color::Idx(32), Duration::from_secs(2)),
-        "active tab '●' should have a blue background\n---\n{}\n---",
+        session.wait_for_char_with_bg('●', vt100::Color::Idx(8), Duration::from_secs(2)),
+        "active tab '●' should have a grey background\n---\n{}\n---",
         session.screen().full_text()
     );
 }
@@ -30,8 +30,8 @@ fn inactive_tab_has_bar_background() {
 
     // Tab 1's `1` digit should now sit on the bar background, not the active colour.
     assert!(
-        session.wait_for_char_with_bg('1', vt100::Color::Idx(235), Duration::from_secs(2)),
-        "inactive tab 1 should have bar background colour\n---\n{}\n---",
+        session.wait_for_char_with_bg('1', vt100::Color::Default, Duration::from_secs(2)),
+        "inactive tab 1 should have default background\n---\n{}\n---",
         session.screen().full_text()
     );
 }

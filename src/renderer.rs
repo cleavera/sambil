@@ -210,10 +210,10 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
 
 fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let row = 0;
-    let bar_bg = vt100::Color::Idx(235);
-    let active_fg = vt100::Color::Idx(255);
-    let active_bg = vt100::Color::Idx(32);
-    let inactive_fg = vt100::Color::Idx(245);
+    let bar_bg = vt100::Color::Default;
+    let active_fg = vt100::Color::Idx(15);
+    let active_bg = vt100::Color::Idx(8);
+    let inactive_fg = vt100::Color::Idx(8);
 
     // Fill entire row with bar background first.
     for col in 0..manager.cols {
