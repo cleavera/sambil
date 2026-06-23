@@ -11,7 +11,7 @@ use common::TestSession;
 fn bracketed_paste_is_forwarded_to_shell() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Simulate what the host terminal sends when the user pastes text:
     // \e[200~ ... content ... \e[201~
@@ -33,7 +33,7 @@ fn bracketed_paste_is_forwarded_to_shell() {
 fn multiline_paste_does_not_execute_early() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Paste two lines. If bracketed paste is NOT handled, the \n triggers
     // immediate execution of the first command and "FIRST_LINE" appears as

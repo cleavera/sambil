@@ -9,7 +9,7 @@ use common::{TestSession, CTRL_B};
 fn exit_in_last_tab_quits_sambil() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_str("exit\n");
 
@@ -25,7 +25,7 @@ fn exit_in_last_tab_quits_sambil() {
 fn exit_in_tab_closes_it_and_switches() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'c']);
     assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");

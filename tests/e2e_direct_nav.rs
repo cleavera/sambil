@@ -9,7 +9,7 @@ use common::{TestSession, CTRL_B};
 fn ctrl_b_number_switches_directly_to_tab() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Open two more tabs so we have 1, 2, 3
     session.send_keys(&[CTRL_B, b'c']);
@@ -40,7 +40,7 @@ fn ctrl_b_number_switches_directly_to_tab() {
 fn ctrl_b_out_of_range_number_is_a_noop() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'9']);
 

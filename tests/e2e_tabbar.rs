@@ -23,7 +23,7 @@ fn active_tab_has_highlighted_background() {
 fn inactive_tab_has_bar_background() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Open a second tab — tab 1 becomes inactive.
     session.send_keys(&[CTRL_B, b'c']);

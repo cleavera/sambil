@@ -10,7 +10,7 @@ use common::{TestSession, CTRL_B, PAGE_UP};
 fn scrolled_off_content_is_accessible() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Print 40 lines — far more than the 23 visible rows — ending with a
     // unique marker so we know all output has arrived.
@@ -58,7 +58,7 @@ fn scrolled_off_content_is_accessible() {
 fn scroll_mode_does_not_forward_input_to_shell() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'[']);
     assert!(session.wait_for_text("SCROLL", Duration::from_secs(1)), "scroll mode did not activate");

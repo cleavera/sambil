@@ -116,6 +116,14 @@ impl TestSession {
         false
     }
 
+    /// Polls until sambil's tab bar is visible, confirming the process has started.
+    pub fn assert_running(&self) {
+        assert!(
+            self.wait_for_text("[●:", Duration::from_secs(2)),
+            "sambil did not render"
+        );
+    }
+
     pub fn screen(&self) -> Screen {
         let parser = self.parser.lock().unwrap();
         Screen::capture(parser.screen())

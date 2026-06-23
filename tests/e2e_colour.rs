@@ -10,7 +10,7 @@ use common::TestSession;
 fn colorterm_env_is_set() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_str("echo $COLORTERM\n");
 
@@ -28,7 +28,7 @@ fn colorterm_env_is_set() {
 fn truecolor_sequences_pass_through() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Emit a known RGB red foreground colour on the letter 'Z' (uncommon enough
     // that it won't collide with prompt text).

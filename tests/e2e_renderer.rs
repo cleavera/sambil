@@ -9,7 +9,7 @@ use common::{TestSession, CTRL_B};
 fn pane_content_persists_across_pane_switches() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_str("echo persist_check\n");
     assert!(

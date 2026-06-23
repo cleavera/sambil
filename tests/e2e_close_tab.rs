@@ -9,7 +9,7 @@ use common::{TestSession, CTRL_B};
 fn ctrl_b_x_closes_active_tab() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'c']);
     assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
@@ -33,7 +33,7 @@ fn ctrl_b_x_closes_active_tab() {
 fn closing_first_tab_switches_to_next() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'c']);
     assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
@@ -72,7 +72,7 @@ fn closing_first_tab_switches_to_next() {
 fn closing_last_tab_exits() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'x']);
 

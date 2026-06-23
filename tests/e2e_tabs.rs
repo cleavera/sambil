@@ -9,7 +9,7 @@ use common::{TestSession, CTRL_B};
 fn ctrl_b_c_opens_a_new_tab() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
     assert!(!session.screen().contains("[2:"), "unexpected second tab at startup");
 
     session.send_keys(&[CTRL_B, b'c']);
@@ -37,7 +37,7 @@ fn ctrl_b_c_opens_a_new_tab() {
 fn can_open_multiple_tabs() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'c']);
     assert!(session.wait_for_text("[1:", Duration::from_secs(2)), "tab 2 did not open");

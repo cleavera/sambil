@@ -8,7 +8,7 @@ use common::{TestSession, CTRL_B};
 #[test]
 fn ctrl_b_c_opens_with_cwd_name_instantly() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'c']);
 
@@ -34,7 +34,7 @@ fn ctrl_b_c_opens_with_cwd_name_instantly() {
 #[test]
 fn ctrl_b_shift_c_shows_naming_prompt() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
 
@@ -49,7 +49,7 @@ fn ctrl_b_shift_c_shows_naming_prompt() {
 #[test]
 fn named_tab_shows_name_in_tab_bar() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
@@ -67,7 +67,7 @@ fn named_tab_shows_name_in_tab_bar() {
 #[test]
 fn empty_name_uses_cwd_basename() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
@@ -90,7 +90,7 @@ fn empty_name_uses_cwd_basename() {
 #[test]
 fn esc_cancels_naming() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");

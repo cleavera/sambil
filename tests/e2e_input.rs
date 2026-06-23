@@ -29,7 +29,7 @@ fn typing_in_active_tab_shows_output() {
 fn switching_tabs_shows_correct_content() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_str("echo tab1_marker\n");
     assert!(session.wait_for_text("tab1_marker", Duration::from_secs(2)), "tab 1 output did not appear");

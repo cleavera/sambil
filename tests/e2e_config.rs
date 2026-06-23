@@ -26,7 +26,7 @@ fn config_file_created_on_first_launch() {
         &[("XDG_CONFIG_HOME", tmp.to_str().unwrap())],
     );
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     let config_path = tmp.join("sambil").join("config.toml");
     assert!(config_path.exists(), "config file was not created at {:?}", config_path);
@@ -52,7 +52,7 @@ fn custom_leader_key_is_respected() {
         &[("XDG_CONFIG_HOME", tmp.to_str().unwrap())],
     );
 
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Ctrl-a c should open a new tab (0x01 = Ctrl-a)
     session.send_keys(&[0x01, b'c']);

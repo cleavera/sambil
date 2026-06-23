@@ -8,7 +8,7 @@ use common::{TestSession, CTRL_B};
 #[test]
 fn ctrl_b_r_shows_rename_prompt_with_current_name() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     // Open a named tab so we have a predictable name to check
     session.send_keys(&[CTRL_B, b'C']);
@@ -34,7 +34,7 @@ fn ctrl_b_r_shows_rename_prompt_with_current_name() {
 #[test]
 fn rename_updates_tab_bar() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
@@ -66,7 +66,7 @@ fn rename_updates_tab_bar() {
 #[test]
 fn esc_cancels_rename() {
     let mut session = TestSession::spawn_sambil(80, 24);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
+    session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
     assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
