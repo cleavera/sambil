@@ -1,3 +1,4 @@
+mod config;
 mod input;
 mod pane;
 mod pane_manager;
@@ -38,11 +39,14 @@ fn run() -> anyhow::Result<()> {
         event::EnableBracketedPaste
     )?;
 
+    let cfg = config::load_or_create();
+    let leader = config::parse_leader(&cfg.leader);
+
     let (cols, rows) = terminal::size()?;
     let mut manager = pane_manager::PaneManager::new(cols, rows)?;
     let mut renderer = renderer::Renderer::new(cols, rows);
 
-    input::event_loop(&mut stdout, &mut manager, &mut renderer)?;
+    input::event_loop(&mut stdout, &mut manager, &mut renderer, leader, &cfg.leader)?;
 
     Ok(())
 }

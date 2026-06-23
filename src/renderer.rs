@@ -81,6 +81,7 @@ impl Renderer {
         prompt: Option<&str>,
         scroll_offset: usize,
         show_help: bool,
+        leader: &str,
     ) -> Result<()> {
         // When toggling in or out of the help overlay, clear the physical
         // terminal and invalidate the diff buffer so every cell is re-emitted.
@@ -93,7 +94,7 @@ impl Renderer {
         let mut next = FrameBuffer::new(manager.rows, manager.cols);
 
         if show_help {
-            paint_help(&mut next, manager);
+            paint_help(&mut next, manager, leader);
         } else {
             paint_pane(&mut next, &manager.panes[manager.active], scroll_offset);
         }
@@ -231,25 +232,34 @@ fn paint_prompt(buf: &mut FrameBuffer, _manager: &PaneManager, text: &str) {
     }
 }
 
-fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager) {
-    let lines = [
-        "",
-        "  Sambil Key Bindings",
-        "  ─────────────────────────────────────",
-        "  Ctrl-b c    New tab (cwd name)",
-        "  Ctrl-b C    New tab (enter name)",
-        "  Ctrl-b x    Close tab",
-        "  Ctrl-b r    Rename tab",
-        "  Ctrl-b n    Next tab",
-        "  Ctrl-b p    Previous tab",
-        "  Ctrl-b 1-9  Switch to tab N",
-        "  Ctrl-b [    Scroll mode",
-        "  Ctrl-b q    Quit",
-        "  Ctrl-b ?    Show this help",
-        "  ─────────────────────────────────────",
-        "  Press any key to dismiss",
-        "",
+fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
+    // Format "ctrl+b" → "Ctrl-b", "ctrl+space" → "Ctrl-space"
+    let display = leader
+        .to_lowercase()
+        .replacen("ctrl+", "Ctrl-", 1);
+
+    let bindings = [
+        ("c",   "New tab (cwd name)"),
+        ("C",   "New tab (enter name)"),
+        ("x",   "Close tab"),
+        ("r",   "Rename tab"),
+        ("n",   "Next tab"),
+        ("p",   "Previous tab"),
+        ("1-9", "Switch to tab N"),
+        ("[",   "Scroll mode"),
+        ("q",   "Quit"),
+        ("?",   "Show this help"),
     ];
+
+    let lines: Vec<String> = std::iter::once(String::new())
+        .chain(std::iter::once("  Sambil Key Bindings".to_string()))
+        .chain(std::iter::once(format!("  {}", "─".repeat(39))))
+        .chain(bindings.iter().map(|(key, desc)| {
+            format!("  {} {}  {}", display, key, desc)
+        }))
+        .chain(std::iter::once(format!("  {}", "─".repeat(39))))
+        .chain(std::iter::once("  Press any key to dismiss".to_string()))
+        .collect();
 
     for (i, line) in lines.iter().enumerate() {
         let row = (i as u16) + 1;

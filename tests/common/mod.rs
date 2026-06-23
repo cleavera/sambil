@@ -16,10 +16,15 @@ pub struct TestSession {
 impl TestSession {
     pub fn spawn_sambil(cols: u16, rows: u16) -> Self {
         let bin = env!("CARGO_BIN_EXE_sambil");
-        Self::spawn_process(bin, &[], cols, rows)
+        Self::spawn_process(bin, &[], cols, rows, &[])
     }
 
-    pub fn spawn_process(bin: &str, args: &[&str], cols: u16, rows: u16) -> Self {
+    pub fn spawn_sambil_with_env(cols: u16, rows: u16, env_vars: &[(&str, &str)]) -> Self {
+        let bin = env!("CARGO_BIN_EXE_sambil");
+        Self::spawn_process(bin, &[], cols, rows, env_vars)
+    }
+
+    pub fn spawn_process(bin: &str, args: &[&str], cols: u16, rows: u16, env_vars: &[(&str, &str)]) -> Self {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
@@ -28,6 +33,9 @@ impl TestSession {
         let mut cmd = CommandBuilder::new(bin);
         for arg in args {
             cmd.arg(arg);
+        }
+        for (k, v) in env_vars {
+            cmd.env(k, v);
         }
         let child = pair.slave.spawn_command(cmd).expect("failed to spawn process");
 

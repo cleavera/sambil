@@ -8,5 +8,7 @@ anyhow = "1"
 crossterm = "0.29"
 portable-pty = "0.9"
 vt100 = "0.16"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 
 [dev-dependencies]

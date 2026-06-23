@@ -21,6 +21,8 @@ pub fn event_loop<W: Write>(
     out: &mut W,
     manager: &mut PaneManager,
     renderer: &mut Renderer,
+    leader: (KeyCode, KeyModifiers),
+    leader_str: &str,
 ) -> Result<()> {
     let mut mode = InputMode::Normal;
 
@@ -38,7 +40,7 @@ pub fn event_loop<W: Write>(
             _ => 0,
         };
         let show_help = matches!(mode, InputMode::Help);
-        renderer.draw(out, manager, prompt.as_deref(), scroll_offset, show_help)?;
+        renderer.draw(out, manager, prompt.as_deref(), scroll_offset, show_help, leader_str)?;
         out.flush()?;
 
         if !event::poll(Duration::from_millis(16))? {
@@ -50,7 +52,7 @@ pub fn event_loop<W: Write>(
 
         match event::read()? {
             Event::Key(key) => {
-                mode = handle_key(key.code, key.modifiers, mode, manager)?;
+                mode = handle_key(key.code, key.modifiers, mode, manager, leader)?;
                 if matches!(mode, InputMode::Quit) {
                     return Ok(());
                 }
@@ -80,6 +82,7 @@ fn handle_key(
     modifiers: KeyModifiers,
     mode: InputMode,
     manager: &mut PaneManager,
+    leader: (KeyCode, KeyModifiers),
 ) -> Result<InputMode> {
     match mode {
         InputMode::AwaitingCommand => match code {
@@ -161,7 +164,7 @@ fn handle_key(
         }
 
         InputMode::Normal => {
-            if code == KeyCode::Char('b') && modifiers.contains(KeyModifiers::CONTROL) {
+            if code == leader.0 && modifiers.contains(leader.1) {
                 return Ok(InputMode::AwaitingCommand);
             }
             if let Some(bytes) = key_to_bytes(code, modifiers) {
