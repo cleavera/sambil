@@ -90,6 +90,10 @@ impl PaneManager {
         self.panes[self.active].write(data)
     }
 
+    pub fn active_bracketed_paste(&self) -> bool {
+        self.panes[self.active].parser.lock().unwrap().screen().bracketed_paste()
+    }
+
     pub fn switch_to(&mut self, index: usize) {
         if index < self.panes.len() {
             self.active = index;

@@ -13,6 +13,7 @@ enum InputMode {
     Naming(String),
     Renaming(String),
     ScrollBack(usize),
+    Help,
     Quit,
 }
 
@@ -36,7 +37,8 @@ pub fn event_loop<W: Write>(
             InputMode::ScrollBack(n) => *n,
             _ => 0,
         };
-        renderer.draw(out, manager, prompt.as_deref(), scroll_offset)?;
+        let show_help = matches!(mode, InputMode::Help);
+        renderer.draw(out, manager, prompt.as_deref(), scroll_offset, show_help)?;
         out.flush()?;
 
         if !event::poll(Duration::from_millis(16))? {
@@ -52,6 +54,17 @@ pub fn event_loop<W: Write>(
                 if matches!(mode, InputMode::Quit) {
                     return Ok(());
                 }
+            }
+            Event::Paste(text) => {
+                let bytes = if manager.active_bracketed_paste() {
+                    let mut v = b"\x1b[200~".to_vec();
+                    v.extend_from_slice(text.as_bytes());
+                    v.extend_from_slice(b"\x1b[201~");
+                    v
+                } else {
+                    text.into_bytes()
+                };
+                manager.write_active(&bytes)?;
             }
             Event::Resize(cols, rows) => {
                 manager.resize(cols, rows)?;
@@ -86,6 +99,7 @@ fn handle_key(
                 return Ok(InputMode::Renaming(current));
             }
             KeyCode::Char('[') => return Ok(InputMode::ScrollBack(0)),
+            KeyCode::Char('?') => return Ok(InputMode::Help),
             KeyCode::Char('n') => manager.switch_to_next(),
             KeyCode::Char('p') => manager.switch_to_prev(),
             KeyCode::Char(d @ '1'..='9') => {
@@ -129,6 +143,8 @@ fn handle_key(
             }
             _ => return Ok(InputMode::Renaming(buf)),
         },
+
+        InputMode::Help => return Ok(InputMode::Normal),
 
         InputMode::ScrollBack(offset) => {
             let page = manager.rows.saturating_sub(1) as usize;

@@ -133,11 +133,12 @@ impl Screen {
             for col in 0..cols {
                 match screen.cell(row, col) {
                     Some(c) => {
-                        cells.push(c.contents().to_string());
+                        let s = c.contents();
+                        cells.push(if s.is_empty() { " ".to_string() } else { s.to_string() });
                         fg_colors.push(c.fgcolor());
                     }
                     None => {
-                        cells.push(String::new());
+                        cells.push(" ".to_string());
                         fg_colors.push(vt100::Color::Default);
                     }
                 }

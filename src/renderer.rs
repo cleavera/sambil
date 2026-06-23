@@ -61,15 +61,17 @@ impl FrameBuffer {
 
 pub struct Renderer {
     prev: FrameBuffer,
+    prev_show_help: bool,
 }
 
 impl Renderer {
     pub fn new(cols: u16, rows: u16) -> Self {
-        Renderer { prev: FrameBuffer::new(rows, cols) }
+        Renderer { prev: FrameBuffer::new(rows, cols), prev_show_help: false }
     }
 
     pub fn invalidate(&mut self, cols: u16, rows: u16) {
         self.prev = FrameBuffer::new(rows, cols);
+        self.prev_show_help = false;
     }
 
     pub fn draw<W: Write>(
@@ -78,10 +80,23 @@ impl Renderer {
         manager: &PaneManager,
         prompt: Option<&str>,
         scroll_offset: usize,
+        show_help: bool,
     ) -> Result<()> {
+        // When toggling in or out of the help overlay, clear the physical
+        // terminal and invalidate the diff buffer so every cell is re-emitted.
+        if show_help != self.prev_show_help {
+            queue!(out, crossterm::terminal::Clear(crossterm::terminal::ClearType::All))?;
+            self.prev = FrameBuffer::new(manager.rows, manager.cols);
+            self.prev_show_help = show_help;
+        }
+
         let mut next = FrameBuffer::new(manager.rows, manager.cols);
 
-        paint_pane(&mut next, &manager.panes[manager.active], scroll_offset);
+        if show_help {
+            paint_help(&mut next, manager);
+        } else {
+            paint_pane(&mut next, &manager.panes[manager.active], scroll_offset);
+        }
         match prompt {
             Some(text) => paint_prompt(&mut next, manager, text),
             None => paint_tab_bar(&mut next, manager),
@@ -185,7 +200,7 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
                     }
                     None => Cell::default(),
                 };
-                buf.set(row, col, cell);
+                buf.set(row + 1, col, cell);
             }
         }
     }
@@ -193,7 +208,7 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
 }
 
 fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
-    let row = manager.rows.saturating_sub(1);
+    let row = 0;
     let mut col = 1u16;
     for (i, pane) in manager.panes.iter().enumerate() {
         let label = if i == manager.active {
@@ -209,10 +224,40 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     }
 }
 
-fn paint_prompt(buf: &mut FrameBuffer, manager: &PaneManager, text: &str) {
-    let row = manager.rows.saturating_sub(1);
+fn paint_prompt(buf: &mut FrameBuffer, _manager: &PaneManager, text: &str) {
+    let row = 0;
     for (col, ch) in text.chars().enumerate() {
         buf.set_text(row, col as u16, ch.to_string());
     }
 }
 
+fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager) {
+    let lines = [
+        "",
+        "  Sambil Key Bindings",
+        "  ─────────────────────────────────────",
+        "  Ctrl-b c    New tab (cwd name)",
+        "  Ctrl-b C    New tab (enter name)",
+        "  Ctrl-b x    Close tab",
+        "  Ctrl-b r    Rename tab",
+        "  Ctrl-b n    Next tab",
+        "  Ctrl-b p    Previous tab",
+        "  Ctrl-b 1-9  Switch to tab N",
+        "  Ctrl-b [    Scroll mode",
+        "  Ctrl-b q    Quit",
+        "  Ctrl-b ?    Show this help",
+        "  ─────────────────────────────────────",
+        "  Press any key to dismiss",
+        "",
+    ];
+
+    for (i, line) in lines.iter().enumerate() {
+        let row = (i as u16) + 1;
+        if row >= manager.rows {
+            break;
+        }
+        for (col, ch) in line.chars().enumerate() {
+            buf.set_text(row, col as u16, ch.to_string());
+        }
+    }
+}
