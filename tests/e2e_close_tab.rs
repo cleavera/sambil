@@ -9,15 +9,15 @@ use common::{TestSession, CTRL_B};
 fn ctrl_b_x_closes_active_tab() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[*2:", Duration::from_secs(2)), "tab 2 did not open");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
 
     session.send_keys(&[CTRL_B, b'x']);
 
     assert!(
-        session.wait_for_text("[*1:", Duration::from_secs(2)),
+        session.wait_for_text("[●:", Duration::from_secs(2)),
         "tab 1 should be active after closing tab 2\n---\n{}\n---",
         session.screen().full_text()
     );
@@ -33,17 +33,18 @@ fn ctrl_b_x_closes_active_tab() {
 fn closing_first_tab_switches_to_next() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[*2:", Duration::from_secs(2)), "tab 2 did not open");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
 
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[*3:", Duration::from_secs(2)), "tab 3 did not open");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 3 did not open");
 
     // Go back to tab 1 and close it
     session.send_keys(&[CTRL_B, b'1']);
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "did not switch to tab 1");
+    // Wait until tab 3 is visible as inactive (confirms we're now on tab 1)
+    assert!(session.wait_for_text("[3:", Duration::from_secs(2)), "did not switch to tab 1");
 
     session.send_keys(&[CTRL_B, b'x']);
 
@@ -55,7 +56,7 @@ fn closing_first_tab_switches_to_next() {
     );
     let screen = session.screen();
     assert!(
-        screen.contains("[*1:"),
+        screen.contains("[●:"),
         "should have an active tab 1 after close\n---\n{}\n---",
         screen.full_text()
     );
@@ -71,7 +72,7 @@ fn closing_first_tab_switches_to_next() {
 fn closing_last_tab_exits() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'x']);
 

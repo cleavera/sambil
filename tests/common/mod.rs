@@ -104,6 +104,18 @@ impl TestSession {
         false
     }
 
+    /// Polls until any cell with content `ch` has background colour `bg`.
+    pub fn wait_for_char_with_bg(&self, ch: char, bg: vt100::Color, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if self.screen().has_char_with_bg(ch, bg) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
     pub fn screen(&self) -> Screen {
         let parser = self.parser.lock().unwrap();
         Screen::capture(parser.screen())
@@ -130,6 +142,7 @@ pub struct Screen {
     cols: u16,
     cells: Vec<String>,
     fg_colors: Vec<vt100::Color>,
+    bg_colors: Vec<vt100::Color>,
 }
 
 impl Screen {
@@ -137,6 +150,7 @@ impl Screen {
         let (rows, cols) = screen.size();
         let mut cells = Vec::with_capacity((rows * cols) as usize);
         let mut fg_colors = Vec::with_capacity((rows * cols) as usize);
+        let mut bg_colors = Vec::with_capacity((rows * cols) as usize);
         for row in 0..rows {
             for col in 0..cols {
                 match screen.cell(row, col) {
@@ -144,15 +158,17 @@ impl Screen {
                         let s = c.contents();
                         cells.push(if s.is_empty() { " ".to_string() } else { s.to_string() });
                         fg_colors.push(c.fgcolor());
+                        bg_colors.push(c.bgcolor());
                     }
                     None => {
                         cells.push(" ".to_string());
                         fg_colors.push(vt100::Color::Default);
+                        bg_colors.push(vt100::Color::Default);
                     }
                 }
             }
         }
-        Screen { rows, cols, cells, fg_colors }
+        Screen { rows, cols, cells, fg_colors, bg_colors }
     }
 
     pub fn contains(&self, text: &str) -> bool {
@@ -164,6 +180,17 @@ impl Screen {
         let ch_str = ch.to_string();
         for i in 0..(self.rows * self.cols) as usize {
             if self.cells[i] == ch_str && self.fg_colors[i] == fg {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Returns true if any cell containing `ch` has background colour `bg`.
+    pub fn has_char_with_bg(&self, ch: char, bg: vt100::Color) -> bool {
+        let ch_str = ch.to_string();
+        for i in 0..(self.rows * self.cols) as usize {
+            if self.cells[i] == ch_str && self.bg_colors[i] == bg {
                 return true;
             }
         }

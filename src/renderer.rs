@@ -210,18 +210,35 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
 
 fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let row = 0;
+    let bar_bg = vt100::Color::Idx(235);
+    let active_fg = vt100::Color::Idx(255);
+    let active_bg = vt100::Color::Idx(32);
+    let inactive_fg = vt100::Color::Idx(245);
+
+    // Fill entire row with bar background first.
+    for col in 0..manager.cols {
+        buf.set(row, col, Cell {
+            content: " ".to_string(),
+            attrs: Attrs { bg: bar_bg, ..Attrs::default() },
+        });
+    }
+
     let mut col = 1u16;
     for (i, pane) in manager.panes.iter().enumerate() {
-        let label = if i == manager.active {
-            format!("[*{}:{}]", i + 1, pane.name)
-        } else {
-            format!("[{}:{}]", i + 1, pane.name)
+        let is_active = i == manager.active;
+        let indicator = if is_active { "●".to_string() } else { (i + 1).to_string() };
+        let label = format!(" [{}:{}] ", indicator, pane.name);
+        let attrs = Attrs {
+            fg: if is_active { active_fg } else { inactive_fg },
+            bg: if is_active { active_bg } else { bar_bg },
+            bold: is_active,
+            ..Attrs::default()
         };
         for ch in label.chars() {
-            buf.set_text(row, col, ch.to_string());
+            if col >= manager.cols { break; }
+            buf.set(row, col, Cell { content: ch.to_string(), attrs: attrs.clone() });
             col += 1;
         }
-        col += 1;
     }
 }
 

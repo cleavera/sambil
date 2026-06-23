@@ -9,7 +9,7 @@ use common::{TestSession, CTRL_B};
 fn ctrl_b_question_shows_help_overlay() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'?']);
 
@@ -36,7 +36,7 @@ fn ctrl_b_question_shows_help_overlay() {
 fn any_key_dismisses_help_overlay() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'?']);
     assert!(session.wait_for_text("Ctrl-b c", Duration::from_secs(2)), "help did not appear");
@@ -50,7 +50,7 @@ fn any_key_dismisses_help_overlay() {
         session.screen().full_text()
     );
     assert!(
-        session.wait_for_text("[*1:", Duration::from_secs(2)),
+        session.wait_for_text("[●:", Duration::from_secs(2)),
         "tab bar should be visible after dismissing help"
     );
 }
@@ -72,7 +72,7 @@ fn help_overlay_reflects_custom_leader() {
         &[("XDG_CONFIG_HOME", tmp.to_str().unwrap())],
     );
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[0x01, b'?']); // Ctrl-a ?
     assert!(

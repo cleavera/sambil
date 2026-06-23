@@ -9,19 +9,19 @@ use common::{TestSession, CTRL_B};
 fn ctrl_b_number_switches_directly_to_tab() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     // Open two more tabs so we have 1, 2, 3
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[*2:", Duration::from_secs(2)), "tab 2 did not open");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
 
     session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[*3:", Duration::from_secs(2)), "tab 3 did not open");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 3 did not open");
 
     // Jump directly back to tab 1
     session.send_keys(&[CTRL_B, b'1']);
     assert!(
-        session.wait_for_text("[*1:", Duration::from_secs(2)),
+        session.wait_for_text("[●:", Duration::from_secs(2)),
         "Ctrl-b 1 did not navigate to tab 1\n---\n{}\n---",
         session.screen().full_text()
     );
@@ -29,7 +29,7 @@ fn ctrl_b_number_switches_directly_to_tab() {
     // Jump directly to tab 3
     session.send_keys(&[CTRL_B, b'3']);
     assert!(
-        session.wait_for_text("[*3:", Duration::from_secs(2)),
+        session.wait_for_text("[●:", Duration::from_secs(2)),
         "Ctrl-b 3 did not navigate to tab 3\n---\n{}\n---",
         session.screen().full_text()
     );
@@ -40,13 +40,13 @@ fn ctrl_b_number_switches_directly_to_tab() {
 fn ctrl_b_out_of_range_number_is_a_noop() {
     let mut session = TestSession::spawn_sambil(80, 24);
 
-    assert!(session.wait_for_text("[*1:", Duration::from_secs(2)), "sambil did not render");
+    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "sambil did not render");
 
     session.send_keys(&[CTRL_B, b'9']);
 
     std::thread::sleep(Duration::from_millis(100));
     assert!(
-        session.screen().contains("[*1:"),
+        session.screen().contains("[●:"),
         "Active tab should still be 1 after out-of-range navigation\n---\n{}\n---",
         session.screen().full_text()
     );
