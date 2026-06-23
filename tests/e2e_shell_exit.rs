@@ -27,8 +27,7 @@ fn exit_in_tab_closes_it_and_switches() {
 
     session.assert_running();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
     // Exit the shell in tab 2
     session.send_str("exit\n");

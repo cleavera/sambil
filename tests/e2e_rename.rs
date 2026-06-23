@@ -12,7 +12,7 @@ fn ctrl_b_r_shows_rename_prompt_with_current_name() {
 
     // Open a named tab so we have a predictable name to check
     session.send_keys(&[CTRL_B, b'C']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
+    session.assert_name_prompt();
     session.send_str("original\r");
     assert!(session.wait_for_text("[●:original]", Duration::from_secs(2)), "named tab did not open");
 
@@ -37,12 +37,12 @@ fn rename_updates_tab_bar() {
     session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
+    session.assert_name_prompt();
     session.send_str("original\r");
     assert!(session.wait_for_text("[●:original]", Duration::from_secs(2)), "named tab did not open");
 
     session.send_keys(&[CTRL_B, b'r']);
-    assert!(session.wait_for_text("Rename tab:", Duration::from_secs(2)), "rename prompt did not appear");
+    session.assert_rename_prompt();
 
     // Clear the pre-filled name and type a new one
     for _ in 0.."original".len() {
@@ -69,12 +69,12 @@ fn esc_cancels_rename() {
     session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "open prompt did not appear");
+    session.assert_name_prompt();
     session.send_str("keepme\r");
     assert!(session.wait_for_text("[●:keepme]", Duration::from_secs(2)), "named tab did not open");
 
     session.send_keys(&[CTRL_B, b'r']);
-    assert!(session.wait_for_text("Rename tab:", Duration::from_secs(2)), "rename prompt did not appear");
+    session.assert_rename_prompt();
 
     session.send_keys(&[0x1b]); // Esc
 

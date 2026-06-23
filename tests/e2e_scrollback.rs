@@ -12,19 +12,22 @@ fn scrolled_off_content_is_accessible() {
 
     session.assert_running();
 
-    // Print 40 lines — far more than the 23 visible rows — ending with a
-    // unique marker so we know all output has arrived.
-    session.send_str("for i in $(seq 1 40); do echo LINE_$i; done\n");
+    // Print 60 lines — well beyond the 23 visible rows — so that LINE_1 through
+    // LINE_19 all scroll off, avoiding false substring matches (LINE_10 contains LINE_1).
+    session.send_str("for i in $(seq 1 60); do echo LINE_$i; done\n");
     assert!(
-        session.wait_for_text("LINE_40", Duration::from_secs(3)),
+        session.wait_for_text("LINE_60", Duration::from_secs(3)),
         "output did not finish\n---\n{}\n---",
         session.screen().full_text()
     );
 
     // The early lines must have scrolled off the visible area.
+    // LINE_19 is the last line that contains "LINE_1" as a substring.
+    // With 23 visible rows and 60 lines printed, rows 38-60 are visible so
+    // none of LINE_1 through LINE_19 should appear.
     assert!(
-        !session.screen().contains("LINE_1"),
-        "LINE_1 should have scrolled off the visible screen\n---\n{}\n---",
+        !session.screen().contains("LINE_19"),
+        "LINE_19 should have scrolled off the visible screen\n---\n{}\n---",
         session.screen().full_text()
     );
 
@@ -40,8 +43,8 @@ fn scrolled_off_content_is_accessible() {
     session.send_keys(PAGE_UP);
 
     assert!(
-        session.wait_for_text("LINE_1", Duration::from_secs(2)),
-        "LINE_1 should be visible after scrolling up\n---\n{}\n---",
+        session.wait_for_text("LINE_19", Duration::from_secs(2)),
+        "LINE_19 should be visible after scrolling up\n---\n{}\n---",
         session.screen().full_text()
     );
 

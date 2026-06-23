@@ -12,14 +12,9 @@ fn ctrl_b_c_opens_a_new_tab() {
     session.assert_running();
     assert!(!session.screen().contains("[2:"), "unexpected second tab at startup");
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.open_tab();
 
     // Wait until tab 1 becomes inactive (its number appears), confirming tab 2 opened.
-    assert!(
-        session.wait_for_text("[1:", Duration::from_secs(2)),
-        "New tab did not open or become active\n---\n{}\n---",
-        session.screen().full_text()
-    );
     assert!(
         session.screen().contains("[1:"),
         "Tab 1 should still appear in the tab bar\n---\n{}\n---",
@@ -39,15 +34,9 @@ fn can_open_multiple_tabs() {
 
     session.assert_running();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[1:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(
-        session.wait_for_text("[2:", Duration::from_secs(2)),
-        "Tab 3 did not open\n---\n{}\n---",
-        session.screen().full_text()
-    );
+    session.open_tab();
 
     let screen = session.screen();
     assert!(screen.contains("[1:"), "tab 1 missing from bar");

@@ -18,8 +18,7 @@ fn pane_content_persists_across_pane_switches() {
     );
 
     // Open a second tab so we can actually switch away
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
     // Switch back to tab 1 — persist_check should still be there
     session.send_keys(&[CTRL_B, b'p']);

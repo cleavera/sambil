@@ -124,6 +124,36 @@ impl TestSession {
         );
     }
 
+    /// Opens a new tab with Ctrl-b c and waits for it to become active.
+    pub fn open_tab(&mut self) {
+        let count_before = self.screen().tab_count();
+        self.send_keys(&[CTRL_B, b'c']);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if self.screen().tab_count() > count_before {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        panic!("new tab did not open within timeout");
+    }
+
+    /// Asserts that the name-new-tab prompt is visible.
+    pub fn assert_name_prompt(&self) {
+        assert!(
+            self.wait_for_text("New tab name:", Duration::from_secs(2)),
+            "name prompt did not appear"
+        );
+    }
+
+    /// Asserts that the rename-tab prompt is visible.
+    pub fn assert_rename_prompt(&self) {
+        assert!(
+            self.wait_for_text("Rename tab:", Duration::from_secs(2)),
+            "rename prompt did not appear"
+        );
+    }
+
     pub fn screen(&self) -> Screen {
         let parser = self.parser.lock().unwrap();
         Screen::capture(parser.screen())
@@ -177,6 +207,15 @@ impl Screen {
             }
         }
         Screen { rows, cols, cells, fg_colors, bg_colors }
+    }
+
+    /// Counts the number of tabs visible in the tab bar (row 0).
+    pub fn tab_count(&self) -> usize {
+        (0..self.cols)
+            .map(|col| self.cells[col as usize].as_str())
+            .collect::<String>()
+            .matches('[')
+            .count()
     }
 
     pub fn contains(&self, text: &str) -> bool {

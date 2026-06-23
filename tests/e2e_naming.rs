@@ -10,13 +10,8 @@ fn ctrl_b_c_opens_with_cwd_name_instantly() {
     let mut session = TestSession::spawn_sambil(80, 24);
     session.assert_running();
 
-    session.send_keys(&[CTRL_B, b'c']);
+    session.open_tab();
 
-    assert!(
-        session.wait_for_text("[●:", Duration::from_secs(2)),
-        "Expected new tab to open immediately\n---\n{}\n---",
-        session.screen().full_text()
-    );
     assert!(
         !session.screen().contains("New tab name:"),
         "Ctrl-b c should not show a prompt\n---\n{}\n---",
@@ -52,7 +47,7 @@ fn named_tab_shows_name_in_tab_bar() {
     session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
+    session.assert_name_prompt();
 
     session.send_str("myproject\r");
 
@@ -70,7 +65,7 @@ fn empty_name_uses_cwd_basename() {
     session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
+    session.assert_name_prompt();
 
     session.send_str("\r");
 
@@ -93,7 +88,7 @@ fn esc_cancels_naming() {
     session.assert_running();
 
     session.send_keys(&[CTRL_B, b'C']);
-    assert!(session.wait_for_text("New tab name:", Duration::from_secs(2)), "prompt did not appear");
+    session.assert_name_prompt();
 
     session.send_keys(&[0x1b]);
 

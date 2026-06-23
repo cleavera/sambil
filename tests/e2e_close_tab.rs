@@ -11,8 +11,7 @@ fn ctrl_b_x_closes_active_tab() {
 
     session.assert_running();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
     session.send_keys(&[CTRL_B, b'x']);
 
@@ -35,11 +34,9 @@ fn closing_first_tab_switches_to_next() {
 
     session.assert_running();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 3 did not open");
+    session.open_tab();
 
     // Go back to tab 1 and close it
     session.send_keys(&[CTRL_B, b'1']);

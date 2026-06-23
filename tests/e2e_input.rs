@@ -35,13 +35,7 @@ fn switching_tabs_shows_correct_content() {
     assert!(session.wait_for_text("tab1_marker", Duration::from_secs(2)), "tab 1 output did not appear");
 
     // Open a new tab with cwd name (instant, no prompt)
-    session.send_keys(&[CTRL_B, b'c']);
-
-    assert!(
-        session.wait_for_text("[●:", Duration::from_secs(2)),
-        "Tab 2 did not become active\n---\n{}\n---",
-        session.screen().full_text()
-    );
+    session.open_tab();
 
     // tab1_marker should NOT be visible in tab 2
     std::thread::sleep(std::time::Duration::from_millis(100));

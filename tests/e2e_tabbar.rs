@@ -26,8 +26,7 @@ fn inactive_tab_has_bar_background() {
     session.assert_running();
 
     // Open a second tab — tab 1 becomes inactive.
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
     // Tab 1's `1` digit should now sit on the bar background, not the active colour.
     assert!(

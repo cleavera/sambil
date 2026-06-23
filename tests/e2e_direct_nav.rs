@@ -12,11 +12,9 @@ fn ctrl_b_number_switches_directly_to_tab() {
     session.assert_running();
 
     // Open two more tabs so we have 1, 2, 3
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 2 did not open");
+    session.open_tab();
 
-    session.send_keys(&[CTRL_B, b'c']);
-    assert!(session.wait_for_text("[●:", Duration::from_secs(2)), "tab 3 did not open");
+    session.open_tab();
 
     // Jump directly back to tab 1
     session.send_keys(&[CTRL_B, b'1']);
