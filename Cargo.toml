@@ -19,4 +19,7 @@ vt100 = "0.16"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 
-[dev-dependencies]
+[target.'cfg(target_os = "macos")'.dependencies]
+libproc = "0.14"
+
+

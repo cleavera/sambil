@@ -6,6 +6,51 @@ use anyhow::Result;
 
 use crate::pane::{path_basename, Pane};
 
+#[cfg(target_os = "macos")]
+mod macos_cwd {
+    use std::ffi::CStr;
+    use std::path::PathBuf;
+
+    use libproc::libproc::proc_pid::{PIDInfo, PidInfoFlavor, pidinfo};
+
+    const MAXPATHLEN: usize = 1024;
+
+    // Mirror of the vinfo_stat C struct (136 bytes on macOS).
+    // The layout matches the Darwin kernel headers exactly.
+    #[repr(C)]
+    struct VinfoStat([u8; 136]);
+
+    #[repr(C)]
+    struct VnodeInfo {
+        _stat: VinfoStat,
+        _type: i32,
+        _pad: i32,
+        _fsid: [i32; 2],
+    }
+
+    #[repr(C)]
+    struct VnodeInfoPath {
+        _vi: VnodeInfo,
+        vip_path: [u8; MAXPATHLEN],
+    }
+
+    #[repr(C)]
+    pub struct ProcVnodePathInfo {
+        pub pvi_cdir: VnodeInfoPath,
+        _pvi_rdir: VnodeInfoPath,
+    }
+
+    impl PIDInfo for ProcVnodePathInfo {
+        fn flavor() -> PidInfoFlavor { PidInfoFlavor::VNodePathInfo }
+    }
+
+    pub fn pid_cwd(pid: u32) -> Option<PathBuf> {
+        let info = pidinfo::<ProcVnodePathInfo>(pid as i32, 0).ok()?;
+        let path = CStr::from_bytes_until_nul(&info.pvi_cdir.vip_path).ok()?;
+        path.to_str().ok().map(PathBuf::from)
+    }
+}
+
 const UNDO_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct Tab {
@@ -234,6 +279,12 @@ impl PaneManager {
         #[cfg(target_os = "linux")]
         if let Some(pid) = pane.child_pid {
             if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
+                return path;
+            }
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(pid) = pane.child_pid {
+            if let Some(path) = macos_cwd::pid_cwd(pid) {
                 return path;
             }
         }
