@@ -56,7 +56,7 @@ impl Pane {
             pixel_height: 0,
         })?;
 
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
+        let shell = default_shell();
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(cwd);
         cmd.env("TERM", "xterm-256color");
@@ -133,4 +133,15 @@ pub fn path_basename(path: &std::path::Path) -> String {
     path.file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "shell".to_string())
+}
+
+fn default_shell() -> String {
+    #[cfg(windows)]
+    {
+        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+    }
 }
