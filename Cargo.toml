@@ -2,6 +2,14 @@
 name = "sambil"
 version = "0.1.0"
 edition = "2024"
+description = "A cross-platform, keyboard-driven terminal multiplexer with tabs and horizontal splits"
+license = "MIT"
+repository = "https://github.com/cleavera/sambil"
+homepage = "https://github.com/cleavera/sambil"
+readme = "README.md"
+keywords = ["terminal", "multiplexer", "pty", "tabs", "tui"]
+categories = ["command-line-utilities"]
+exclude = ["roadmap.md"]
 
 [dependencies]
 anyhow = "1"
