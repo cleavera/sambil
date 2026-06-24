@@ -2,8 +2,6 @@
 
 A cross-platform, keyboard-driven terminal multiplexer.
 
-Built for people who live in the terminal and want tabs and splits without reaching for the mouse.
-
 ---
 
 ## Installation
