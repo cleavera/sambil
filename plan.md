@@ -2,6 +2,205 @@
 
 ## Overview
 
+Sambil is a cross-platform terminal multiplexer written in Rust. The goal is a keyboard-driven
+alternative to tmux with sensible defaults, discoverable keybindings, and minimal configuration
+friction.
+
+---
+
+## Technology Stack
+
+| Concern | Crate | Reason |
+|---|---|---|
+| Terminal I/O | `crossterm` | Cross-platform raw mode, input events, ANSI rendering |
+| Pseudo-terminal | `portable-pty` | Cross-platform PTY (WezTerm project — Linux, macOS, Windows) |
+| VT100 parsing | `vt100` | Parses ANSI escape codes into a queryable character grid |
+| Config | `serde` + `toml` | Human-readable config file, written on first launch |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   App (main loop)                │
+│                                                 │
+│  ┌──────────┐   input   ┌──────────────────┐   │
+│  │  Input   │ ────────► │   handle_key     │   │
+│  │  Events  │           │  (InputMode FSM) │   │
+│  └──────────┘           └────────┬─────────┘   │
+│                                  │ write        │
+│  ┌────────────────────────────── ▼ ──────────┐  │
+│  │              PaneManager                  │  │
+│  │  Vec<Pane>, active index, pending_close   │  │
+│  │  ┌─────────────┐   ┌─────────────┐       │  │
+│  │  │   Pane 0    │   │   Pane 1    │  ...  │  │
+│  │  │  PTY + vt100│   │  PTY + vt100│       │  │
+│  │  └─────────────┘   └─────────────┘       │  │
+│  └───────────────────────────────────────────┘  │
+│                         │ render                │
+│  ┌──────────────────────▼──────────────────┐    │
+│  │               Renderer                  │    │
+│  │   diff buffer, SGR colours, tab bar,    │    │
+│  │   help overlay, scroll/prompt modes     │    │
+│  └─────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────┘
+```
+
+---
+
+## Key Bindings
+
+| Key | Action |
+|---|---|
+| `Ctrl-b n` | Next tab |
+| `Ctrl-b p` | Previous tab |
+| `Ctrl-b 1`–`9` | Switch directly to tab N |
+| `Ctrl-b c` | New tab (named after cwd) |
+| `Ctrl-b C` | New tab (prompt for name) |
+| `Ctrl-b x` | Close active tab (undo within 10s with `u`) |
+| `Ctrl-b u` | Undo last tab close |
+| `Ctrl-b r` | Rename active tab |
+| `Ctrl-b [` | Enter scrollback mode |
+| `Ctrl-b ?` | Show help overlay |
+| `Ctrl-b q` | Quit |
+
+Leader key defaults to `Ctrl-b` but is configurable in `~/.config/sambil/config.toml`.
+
+---
+
+## Testing Strategy — Red/Green E2E
+
+All features are driven by end-to-end tests written **before** their implementation (red/green).
+There are no unit tests for internal components; the external observable behaviour is the contract.
+
+Each test spawns the real `sambil` binary inside a PTY, feeds input bytes, reads back the rendered
+output through a `vt100::Parser`, and asserts on the character/colour grid.
+
+### `TestSession` helpers
+
+```rust
+let mut session = TestSession::spawn_sambil(80, 24);
+session.assert_running();          // wait for tab bar to appear
+session.open_tab();                // Ctrl-b c + wait for count to increase
+session.assert_name_prompt();      // wait for "New tab name:"
+session.assert_rename_prompt();    // wait for "Rename tab:"
+session.wait_for_text("hello", Duration::from_secs(2));
+session.wait_for_no_text("...", timeout);
+session.wait_for_char_with_fg('x', vt100::Color::Idx(2), timeout);
+session.wait_for_char_with_bg('x', vt100::Color::Idx(8), timeout);
+session.screen().full_text()
+session.screen().tab_count()
+```
+
+---
+
+## Completed Features
+
+- [x] Test harness (`TestSession`, `Screen`, `wait_for_text`, helpers)
+- [x] Project scaffold, raw mode, panic-safe terminal restore
+- [x] PTY shell spawning, async output reader threads, cwd inheritance
+- [x] Diff renderer (double-buffer, no flicker), full SGR colour passthrough
+- [x] Input routing, `InputMode` FSM (Normal → AwaitingCommand → ...)
+- [x] Tab bar at top of screen with visual distinction (palette colours, `●` active indicator)
+- [x] Tab operations: open (c/C), close (x), rename (r), quit (q), switch (n/p/1–9)
+- [x] Tab naming: cwd basename on creation, optional prompt, rename flow
+- [x] Undo close tab (`Ctrl-b u`, 10s window, live session preserved)
+- [x] Colour fidelity (`TERM=xterm-256color`, `COLORTERM=truecolor`, full SGR attrs)
+- [x] Shell exit auto-closes tab (EOF on PTY master detected by reader thread)
+- [x] Scrollback (`Ctrl-b [`, 1000 lines, arrow/PgUp/PgDn, `q`/Esc to exit)
+- [x] Bracketed paste (`EnableBracketedPaste`, `Event::Paste` wrapping)
+- [x] Help overlay (`Ctrl-b ?`, dynamic leader key display)
+- [x] Nested instance prevention (`$SAMBIL` env var guard)
+- [x] Configurable leader key (`config.toml` written on first launch with comments)
+
+---
+
+## Upcoming Phases
+
+### Phase 11 — Terminal resize handling
+When the terminal window is resized, sambil must respond to the crossterm `Event::Resize` event,
+update the `PaneManager` dimensions, resize each PTY via `portable-pty`'s `resize` API, and
+invalidate the renderer's diff buffer so the next frame redraws fully.
+
+Without this, resizing the terminal corrupts the layout and is immediately painful in daily use.
+
+Red/green: test that after a resize event sambil re-renders correctly at the new dimensions.
+
+### Phase 12 — Copy mode (text selection and copy from scrollback)
+Extend the existing `ScrollBack` input mode to support text selection. The user marks a start
+position, moves to an end position, and copies the selected region to the system clipboard (via
+`arboard` or falling back to OSC 52 escape sequences for cross-platform support).
+
+This is the last critical missing feature before comfortable daily use.
+
+Red/green: test that text selected in scroll mode is available on the clipboard after the copy
+command.
+
+### Phase 13 — Window title → tab name passthrough (nice to have)
+When a child process sets the terminal window title (OSC 2 / `\e]2;title\a`), rather than passing
+it through to the host terminal (which would overwrite the whole window title), use it to update
+the active tab's name — but only if the tab still has its auto-generated cwd name (i.e. the user
+hasn't manually renamed it). This makes tools like `gitui` automatically label their tab.
+
+Red/green: test that an OSC 2 sequence from the shell updates the tab name in the bar.
+
+### Phase 14 — Splits (intentionally deferred)
+Vertical and horizontal pane splits within a tab, zoom to fullscreen, resize splits. This is the
+most complex remaining feature and is deliberately left until the single-pane workflow has been
+proven in daily use.
+
+---
+
+## Config File (`~/.config/sambil/config.toml`)
+
+Written on first launch with commented-out defaults so all options are discoverable:
+
+```toml
+# Leader key prefix. Examples: "ctrl+b", "ctrl+space", "ctrl+a"
+# leader = "ctrl+b"
+```
+
+Future options (when implemented): tab bar position, colour overrides, scrollback size.
+
+---
+
+## File Structure
+
+```
+src/
+  main.rs          — entry point, config load, SAMBIL guard, event loop
+  pane.rs          — Pane struct, PTY lifecycle, vt100 parser, exited flag
+  pane_manager.rs  — Vec<Pane>, active index, pending_close queue, tab ops
+  input.rs         — InputMode FSM, handle_key, event_loop
+  renderer.rs      — FrameBuffer diff, SGR colour, tab bar, help, prompt
+  config.rs        — Config struct, load_or_create, parse_leader
+
+tests/
+  common/
+    mod.rs              — TestSession, Screen, wait helpers, key constants
+  e2e_startup.rs        — sambil launches and renders tab bar
+  e2e_input.rs          — typing routes to the active pane only
+  e2e_tabs.rs           — open/switch/close tabs
+  e2e_close_tab.rs      — close tab, last tab exits
+  e2e_undo_close.rs     — undo close restores live session
+  e2e_direct_nav.rs     — Ctrl-b 1–9 direct tab switching
+  e2e_naming.rs         — cwd name on open, prompt on Ctrl-b C
+  e2e_rename.rs         — Ctrl-b r rename flow
+  e2e_renderer.rs       — diff renderer, no flicker
+  e2e_colour.rs         — truecolour passthrough
+  e2e_shell_exit.rs     — shell exit auto-closes tab
+  e2e_scrollback.rs     — scroll mode navigation
+  e2e_paste.rs          — bracketed paste wrapping
+  e2e_help.rs           — help overlay, dynamic leader
+  e2e_config.rs         — config file creation, custom leader
+  e2e_tabbar.rs         — tab bar colours
+  e2e_quit.rs           — Ctrl-b q clean exit
+```
+
+
+## Overview
+
 Sambil is a cross-platform terminal multiplexer written in Rust. The MVP provides two independent
 terminal sessions rendered side-by-side in a single terminal window, with keyboard-driven switching
 between them.
