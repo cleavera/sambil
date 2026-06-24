@@ -10,7 +10,7 @@ pub struct TestSession {
     writer: Box<dyn Write + Send>,
     parser: Arc<Mutex<vt100::Parser>>,
     child: Box<dyn portable_pty::Child + Send + Sync>,
-    _master: Box<dyn portable_pty::MasterPty + Send>,
+    master: Box<dyn portable_pty::MasterPty + Send>,
 }
 
 impl TestSession {
@@ -58,7 +58,7 @@ impl TestSession {
             }
         });
 
-        TestSession { writer, parser, child, _master: pair.master }
+        TestSession { writer, parser, child, master: pair.master }
     }
 
     pub fn send_str(&mut self, s: &str) {
@@ -67,6 +67,14 @@ impl TestSession {
 
     pub fn send_keys(&mut self, keys: &[u8]) {
         self.writer.write_all(keys).expect("failed to write keys to PTY");
+    }
+
+    /// Resizes the outer PTY, which sends a SIGWINCH to sambil triggering an `Event::Resize`.
+    pub fn resize(&mut self, cols: u16, rows: u16) {
+        self.master
+            .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .expect("failed to resize PTY");
+        self.parser.lock().unwrap().screen_mut().set_size(rows, cols);
     }
 
     /// Polls the rendered screen until `text` appears or the timeout is reached.
