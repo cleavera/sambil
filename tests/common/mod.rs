@@ -100,6 +100,17 @@ impl TestSession {
         false
     }
 
+    pub fn wait_for_screen<F: Fn(&Screen) -> bool>(&self, pred: F, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if pred(&self.screen()) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
     /// Polls until any cell with content `ch` has foreground colour `fg`.
     pub fn wait_for_char_with_fg(&self, ch: char, fg: vt100::Color, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
@@ -281,5 +292,7 @@ pub const CTRL_C: u8 = 0x03;
 pub const CTRL_D: u8 = 0x04;
 pub const UP_ARROW: &[u8] = b"\x1b[A";
 pub const DOWN_ARROW: &[u8] = b"\x1b[B";
+pub const LEFT_ARROW: &[u8] = b"\x1b[D";
+pub const RIGHT_ARROW: &[u8] = b"\x1b[C";
 pub const PAGE_UP: &[u8] = b"\x1b[5~";
 pub const PAGE_DOWN: &[u8] = b"\x1b[6~";

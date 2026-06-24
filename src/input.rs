@@ -89,7 +89,7 @@ fn handle_key(
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
             KeyCode::Char('x') => {
-                if manager.close_active_tab() {
+                if manager.close_active_pane() {
                     return Ok(InputMode::Quit);
                 }
             }
@@ -104,6 +104,16 @@ fn handle_key(
             KeyCode::Char('r') => {
                 let current = manager.active_name().to_string();
                 return Ok(InputMode::Renaming(current));
+            }
+            KeyCode::Char('|') => {
+                manager.split_horizontal()?;
+                return Ok(InputMode::Normal);
+            }
+            KeyCode::Left => {
+                manager.focus_prev_pane();
+            }
+            KeyCode::Right => {
+                manager.focus_next_pane();
             }
             KeyCode::Char('[') => return Ok(InputMode::ScrollBack(0)),
             KeyCode::Char('?') => return Ok(InputMode::Help),
@@ -139,7 +149,7 @@ fn handle_key(
         InputMode::Renaming(mut buf) => match code {
             KeyCode::Enter => {
                 if buf.is_empty() {
-                    manager.panes[manager.active].name = None; // revert to auto-named
+                    manager.tabs[manager.active_tab].name = None; // revert to auto-named
                 } else {
                     manager.rename_active(buf);
                 }

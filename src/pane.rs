@@ -18,9 +18,6 @@ impl vt100::Callbacks for TitleCallbacks {
 }
 
 pub struct Pane {
-    /// Explicit user-set name. `None` means auto-named: display is derived
-    /// from the OSC 2 window title (if any) and the cwd basename.
-    pub name: Option<String>,
     pub width: u16,
     pub height: u16,
     writer: Box<dyn Write + Send>,
@@ -75,7 +72,6 @@ impl Pane {
         });
 
         Ok(Pane {
-            name: None,
             width,
             height,
             writer,
@@ -88,23 +84,13 @@ impl Pane {
         })
     }
 
-    /// The display name shown in the tab bar.
-    /// - Explicit name (`Some`) is shown as-is.
-    /// - Auto-named (`None`): `title/cwd` if an OSC 2 title is set, otherwise just `cwd`.
-    pub fn display_name(&self) -> String {
-        if let Some(ref name) = self.name {
-            return name.clone();
-        }
-        let cwd = crate::pane_manager::path_basename(&self.cwd);
+    /// Auto-computed name: OSC 2 title if set, otherwise cwd basename.
+    /// Used by `Tab::display_name()` when no explicit tab name is set.
+    pub fn auto_name(&self) -> String {
         match self.parser.lock().unwrap().callbacks().title.as_deref() {
             Some(title) if !title.is_empty() => title.to_string(),
-            _ => cwd,
+            _ => path_basename(&self.cwd),
         }
-    }
-
-    /// Returns the latest OSC 2 title emitted by the child, if any.
-    pub fn window_title(&self) -> Option<String> {
-        self.parser.lock().unwrap().callbacks().title.clone()
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
@@ -126,3 +112,8 @@ impl Pane {
     }
 }
 
+pub fn path_basename(path: &std::path::Path) -> String {
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "shell".to_string())
+}

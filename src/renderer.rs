@@ -96,7 +96,7 @@ impl Renderer {
         if show_help {
             paint_help(&mut next, manager, leader);
         } else {
-            paint_pane(&mut next, &manager.panes[manager.active], scroll_offset);
+            paint_active_tab(&mut next, manager, scroll_offset);
         }
         match prompt {
             Some(text) => paint_prompt(&mut next, manager, text),
@@ -176,7 +176,27 @@ fn vt100_color_to_crossterm(color: vt100::Color) -> Color {
     }
 }
 
-fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
+fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: usize) {
+    let tab = &manager.tabs[manager.active_tab];
+    let n = tab.panes.len();
+    let mut col_offset = 0u16;
+    for (i, pane) in tab.panes.iter().enumerate() {
+        let offset = if i == tab.active_pane { scroll_offset } else { 0 };
+        paint_pane(buf, pane, col_offset, offset);
+        col_offset += pane.width;
+        if i + 1 < n {
+            for row in 1..buf.rows {
+                buf.set(row, col_offset, Cell {
+                    content: "│".to_string(),
+                    attrs: Attrs { fg: vt100::Color::Idx(8), ..Attrs::default() },
+                });
+            }
+            col_offset += 1;
+        }
+    }
+}
+
+fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: u16, scroll_offset: usize) {
     let mut parser = pane.parser.lock().unwrap();
     parser.screen_mut().set_scrollback(scroll_offset);
     {
@@ -201,7 +221,7 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, scroll_offset: usize) {
                     }
                     None => Cell::default(),
                 };
-                buf.set(row + 1, col, cell);
+                buf.set(row + 1, col + col_offset, cell);
             }
         }
     }
@@ -224,10 +244,10 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     }
 
     let mut col = 1u16;
-    for (i, pane) in manager.panes.iter().enumerate() {
-        let is_active = i == manager.active;
+    for (i, tab) in manager.tabs.iter().enumerate() {
+        let is_active = i == manager.active_tab;
         let indicator = if is_active { "●".to_string() } else { (i + 1).to_string() };
-        let label = format!(" [{}:{}] ", indicator, pane.display_name());
+        let label = format!(" [{}:{}] ", indicator, tab.display_name());
         let attrs = Attrs {
             fg: if is_active { active_fg } else { inactive_fg },
             bg: if is_active { active_bg } else { bar_bg },
@@ -269,17 +289,19 @@ fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
         .replacen("ctrl+", "Ctrl-", 1);
 
     let bindings = [
-        ("c",   "New tab (cwd name)"),
-        ("C",   "New tab (enter name)"),
-        ("x",   "Close tab"),
-        ("u",   "Undo close tab"),
-        ("r",   "Rename tab"),
-        ("n",   "Next tab"),
-        ("p",   "Previous tab"),
-        ("1-9", "Switch to tab N"),
-        ("[",   "Scroll mode"),
-        ("q",   "Quit"),
-        ("?",   "Show this help"),
+        ("c",    "New tab (cwd name)"),
+        ("C",    "New tab (enter name)"),
+        ("|",    "Split horizontal"),
+        ("x",    "Close pane (tab if last)"),
+        ("u",    "Undo close tab"),
+        ("r",    "Rename tab"),
+        ("n",    "Next tab"),
+        ("p",    "Previous tab"),
+        ("←/→",  "Previous/next pane"),
+        ("1-9",  "Switch to tab N"),
+        ("[",    "Scroll mode"),
+        ("q",    "Quit"),
+        ("?",    "Show this help"),
     ];
 
     let lines: Vec<String> = std::iter::once(String::new())
