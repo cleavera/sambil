@@ -6,6 +6,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
 use crate::pane_manager::PaneManager;
 use crate::renderer::Renderer;
+use crate::size::TerminalSize;
 
 enum InputMode {
     Normal,
@@ -70,8 +71,9 @@ pub fn event_loop<W: Write>(
                 manager.write_active(&bytes)?;
             }
             Event::Resize(cols, rows) => {
-                manager.resize(cols, rows)?;
-                renderer.invalidate(cols, rows);
+                let size = TerminalSize::new_clamped(cols, rows);
+                manager.resize(size)?;
+                renderer.invalidate(size);
             }
             _ => {}
         }
@@ -170,7 +172,7 @@ fn handle_key(
         InputMode::Help => return Ok(InputMode::Normal),
 
         InputMode::ScrollBack(offset) => {
-            let page = manager.rows.saturating_sub(1) as usize;
+            let page = manager.size.rows().saturating_sub(1) as usize;
             const MAX_SCROLLBACK: usize = 1000;
             match code {
                 KeyCode::Up => return Ok(InputMode::ScrollBack(offset.saturating_add(1).min(MAX_SCROLLBACK))),

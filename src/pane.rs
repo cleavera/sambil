@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
+use crate::size::TerminalSize;
+
 /// vt100 callbacks implementation that captures OSC 2 window title sequences
 /// and DECSCUSR cursor shape sequences.
 #[derive(Default)]
@@ -47,11 +49,11 @@ pub struct Pane {
 }
 
 impl Pane {
-    pub fn spawn(cwd: &std::path::Path, width: u16, height: u16) -> Result<Self> {
+    pub fn spawn(cwd: &std::path::Path, size: TerminalSize) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
-            rows: height,
-            cols: width,
+            rows: size.rows(),
+            cols: size.cols(),
             pixel_width: 0,
             pixel_height: 0,
         })?;
@@ -69,7 +71,7 @@ impl Pane {
         let mut reader = pair.master.try_clone_reader()?;
 
         let parser = Arc::new(Mutex::new(
-            vt100::Parser::new_with_callbacks(height, width, 1000, TitleCallbacks::default()),
+            vt100::Parser::new_with_callbacks(size.rows(), size.cols(), 1000, TitleCallbacks::default()),
         ));
         let parser_clone = Arc::clone(&parser);
         let exited = Arc::new(AtomicBool::new(false));
@@ -89,8 +91,8 @@ impl Pane {
         });
 
         Ok(Pane {
-            width,
-            height,
+            width: size.cols(),
+            height: size.rows(),
             writer,
             parser,
             child_pid,
@@ -115,16 +117,16 @@ impl Pane {
         Ok(())
     }
 
-    pub fn resize(&mut self, new_width: u16, new_height: u16) -> Result<()> {
-        self.width = new_width;
-        self.height = new_height;
+    pub fn resize(&mut self, size: TerminalSize) -> Result<()> {
+        self.width = size.cols();
+        self.height = size.rows();
         self.master.resize(portable_pty::PtySize {
-            rows: new_height,
-            cols: new_width,
+            rows: size.rows(),
+            cols: size.cols(),
             pixel_width: 0,
             pixel_height: 0,
         })?;
-        self.parser.lock().unwrap().screen_mut().set_size(new_height, new_width);
+        self.parser.lock().unwrap().screen_mut().set_size(size.rows(), size.cols());
         Ok(())
     }
 }

@@ -10,6 +10,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
+use crate::size::TerminalSize;
 
 #[derive(Clone, PartialEq, Default)]
 struct Attrs {
@@ -34,31 +35,30 @@ impl Default for Cell {
 }
 
 struct FrameBuffer {
-    rows: u16,
-    cols: u16,
+    size: TerminalSize,
     cells: Vec<Cell>,
 }
 
 impl FrameBuffer {
-    fn new(rows: u16, cols: u16) -> Self {
-        FrameBuffer { rows, cols, cells: vec![Cell::default(); rows as usize * cols as usize] }
+    fn new(size: TerminalSize) -> Self {
+        FrameBuffer { size, cells: vec![Cell::default(); size.rows() as usize * size.cols() as usize] }
     }
 
     fn set(&mut self, row: u16, col: u16, cell: Cell) {
-        if row < self.rows && col < self.cols {
-            self.cells[row as usize * self.cols as usize + col as usize] = cell;
+        if row < self.size.rows() && col < self.size.cols() {
+            self.cells[row as usize * self.size.cols() as usize + col as usize] = cell;
         }
     }
 
     fn set_text(&mut self, row: u16, col: u16, content: impl Into<String>) {
-        if row < self.rows && col < self.cols {
-            self.cells[row as usize * self.cols as usize + col as usize].content = content.into();
+        if row < self.size.rows() && col < self.size.cols() {
+            self.cells[row as usize * self.size.cols() as usize + col as usize].content = content.into();
         }
     }
 
     fn get(&self, row: u16, col: u16) -> Option<&Cell> {
-        if row < self.rows && col < self.cols {
-            Some(&self.cells[row as usize * self.cols as usize + col as usize])
+        if row < self.size.rows() && col < self.size.cols() {
+            Some(&self.cells[row as usize * self.size.cols() as usize + col as usize])
         } else {
             None
         }
@@ -71,12 +71,12 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(cols: u16, rows: u16) -> Self {
-        Renderer { prev: FrameBuffer::new(rows, cols), prev_show_help: false }
+    pub fn new(size: TerminalSize) -> Self {
+        Renderer { prev: FrameBuffer::new(size), prev_show_help: false }
     }
 
-    pub fn invalidate(&mut self, cols: u16, rows: u16) {
-        self.prev = FrameBuffer::new(rows, cols);
+    pub fn invalidate(&mut self, size: TerminalSize) {
+        self.prev = FrameBuffer::new(size);
         self.prev_show_help = false;
     }
 
@@ -93,11 +93,11 @@ impl Renderer {
         // terminal and invalidate the diff buffer so every cell is re-emitted.
         if show_help != self.prev_show_help {
             queue!(out, crossterm::terminal::Clear(crossterm::terminal::ClearType::All))?;
-            self.prev = FrameBuffer::new(manager.rows, manager.cols);
+            self.prev = FrameBuffer::new(manager.size);
             self.prev_show_help = show_help;
         }
 
-        let mut next = FrameBuffer::new(manager.rows, manager.cols);
+        let mut next = FrameBuffer::new(manager.size);
 
         if show_help {
             paint_help(&mut next, manager, leader);
@@ -145,8 +145,8 @@ impl Renderer {
         let mut cursor: Option<(u16, u16)> = None;
         let mut current_attrs = Attrs::default();
 
-        for row in 0..next.rows {
-            for col in 0..next.cols {
+        for row in 0..next.size.rows() {
+            for col in 0..next.size.cols() {
                 let new_cell = match next.get(row, col) {
                     Some(c) => c,
                     None => continue,
@@ -225,7 +225,7 @@ fn decscusr_to_crossterm(ps: u16) -> SetCursorStyle {
 fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: usize) {
     let tab = &manager.tabs[manager.active_tab];
     let n = tab.panes.len();
-    let mid_row = (buf.rows + 1) / 2; // vertical midpoint of content area
+    let mid_row = (buf.size.rows() + 1) / 2; // vertical midpoint of content area
     let mut col_offset = 0u16;
     for (i, pane) in tab.panes.iter().enumerate() {
         let offset = if i == tab.active_pane { scroll_offset } else { 0 };
@@ -240,7 +240,7 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
             } else {
                 "│"
             };
-            for row in 1..buf.rows {
+            for row in 1..buf.size.rows() {
                 let (content, fg) = if row == mid_row && indicator != "│" {
                     (indicator, vt100::Color::Idx(15))
                 } else {
@@ -296,7 +296,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let inactive_fg = vt100::Color::Idx(8);
 
     // Fill entire row with bar background first.
-    for col in 0..manager.cols {
+    for col in 0..manager.size.cols() {
         buf.set(row, col, Cell {
             content: " ".to_string(),
             attrs: Attrs { bg: bar_bg, ..Attrs::default() },
@@ -315,7 +315,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
             ..Attrs::default()
         };
         for ch in label.chars() {
-            if col >= manager.cols { break; }
+            if col >= manager.size.cols() { break; }
             buf.set(row, col, Cell { content: ch.to_string(), attrs: attrs.clone() });
             col += 1;
         }
@@ -324,11 +324,11 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     // Undo hint — right-aligned when a closed tab is pending.
     if manager.has_pending_close() {
         let hint = " ↩ u ";
-        let hint_col = manager.cols.saturating_sub(hint.chars().count() as u16);
+        let hint_col = manager.size.cols().saturating_sub(hint.chars().count() as u16);
         let hint_attrs = Attrs { fg: vt100::Color::Idx(11), ..Attrs::default() };
         for (offset, ch) in hint.chars().enumerate() {
             let c = hint_col + offset as u16;
-            if c < manager.cols {
+            if c < manager.size.cols() {
                 buf.set(row, c, Cell { content: ch.to_string(), attrs: hint_attrs.clone() });
             }
         }
@@ -376,7 +376,7 @@ fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
 
     for (i, line) in lines.iter().enumerate() {
         let row = (i as u16) + 1;
-        if row >= manager.rows {
+        if row >= manager.size.rows() {
             break;
         }
         for (col, ch) in line.chars().enumerate() {

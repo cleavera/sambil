@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::pane::{path_basename, Pane};
+use crate::size::TerminalSize;
 
 #[cfg(target_os = "macos")]
 mod macos_cwd {
@@ -87,20 +88,19 @@ impl Tab {
 pub struct PaneManager {
     pub tabs: Vec<Tab>,
     pub active_tab: usize,
-    pub cols: u16,
-    pub rows: u16,
+    pub size: TerminalSize,
     pending_close: Vec<(Tab, Instant)>,
 }
 
 impl PaneManager {
-    pub fn new(cols: u16, rows: u16) -> Result<Self> {
-        let pane_height = rows.saturating_sub(1);
+    pub fn new(size: TerminalSize) -> Result<Self> {
+        let pane_height = size.rows().saturating_sub(1);
+        let pane_size = TerminalSize::new_clamped(size.cols(), pane_height);
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
         Ok(PaneManager {
-            tabs: vec![Tab::new(Pane::spawn(&cwd, cols, pane_height)?)],
+            tabs: vec![Tab::new(Pane::spawn(&cwd, pane_size)?)],
             active_tab: 0,
-            cols,
-            rows,
+            size,
             pending_close: vec![],
         })
     }
@@ -211,7 +211,8 @@ impl PaneManager {
     /// Opens a new auto-named tab.
     pub fn open_tab(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
-        let pane = Pane::spawn(&cwd, self.cols, self.rows.saturating_sub(1))?;
+        let pane_size = TerminalSize::new_clamped(self.size.cols(), self.size.rows().saturating_sub(1));
+        let pane = Pane::spawn(&cwd, pane_size)?;
         self.tabs.push(Tab::new(pane));
         self.active_tab = self.tabs.len() - 1;
         Ok(())
@@ -227,8 +228,8 @@ impl PaneManager {
     /// Splits the active tab horizontally, adding a new pane to the right.
     pub fn split_horizontal(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
-        let height = self.rows.saturating_sub(1);
-        let new_pane = Pane::spawn(&cwd, 1, height)?;
+        let height = self.size.rows().saturating_sub(1);
+        let new_pane = Pane::spawn(&cwd, TerminalSize::new_clamped(1, height))?;
         self.tabs[self.active_tab].panes.push(new_pane);
         self.tabs[self.active_tab].active_pane = self.tabs[self.active_tab].panes.len() - 1;
         self.resize_tab_panes(self.active_tab)
@@ -253,11 +254,11 @@ impl PaneManager {
         if n == 0 {
             return Ok(());
         }
-        let height = self.rows.saturating_sub(1);
-        let (base_w, last_w) = pane_widths(self.cols, n);
+        let height = self.size.rows().saturating_sub(1);
+        let (base_w, last_w) = pane_widths(self.size.cols(), n);
         for (i, pane) in self.tabs[tab_idx].panes.iter_mut().enumerate() {
             let w = if i == n - 1 { last_w } else { base_w };
-            pane.resize(w, height)?;
+            pane.resize(TerminalSize::new_clamped(w, height))?;
         }
         Ok(())
     }
@@ -330,9 +331,8 @@ impl PaneManager {
         self.active_tab = self.active_tab.checked_sub(1).unwrap_or(self.tabs.len().saturating_sub(1));
     }
 
-    pub fn resize(&mut self, cols: u16, rows: u16) -> Result<()> {
-        self.cols = cols;
-        self.rows = rows;
+    pub fn resize(&mut self, size: TerminalSize) -> Result<()> {
+        self.size = size;
         for i in 0..self.tabs.len() {
             self.resize_tab_panes(i)?;
         }

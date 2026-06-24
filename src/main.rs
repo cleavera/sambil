@@ -3,11 +3,14 @@ mod input;
 mod pane;
 mod pane_manager;
 mod renderer;
+mod size;
 
 use std::io;
 use std::panic;
 
 use crossterm::{cursor, event, execute, terminal};
+
+use size::TerminalSize;
 
 fn main() {
     let default_hook = panic::take_hook();
@@ -43,8 +46,9 @@ fn run() -> anyhow::Result<()> {
     let leader = config::parse_leader(&cfg.leader);
 
     let (cols, rows) = terminal::size()?;
-    let mut manager = pane_manager::PaneManager::new(cols, rows)?;
-    let mut renderer = renderer::Renderer::new(cols, rows);
+    let size = TerminalSize::new_clamped(cols, rows);
+    let mut manager = pane_manager::PaneManager::new(size)?;
+    let mut renderer = renderer::Renderer::new(size);
 
     input::event_loop(&mut stdout, &mut manager, &mut renderer, leader, &cfg.leader)?;
 
