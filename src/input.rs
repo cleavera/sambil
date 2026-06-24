@@ -200,8 +200,12 @@ fn handle_key(
 fn key_to_bytes(code: KeyCode, modifiers: KeyModifiers) -> Option<Vec<u8>> {
     match code {
         KeyCode::Char(c) if modifiers.contains(KeyModifiers::CONTROL) => {
-            let b = c.to_ascii_lowercase() as u8;
-            if b.is_ascii_alphabetic() { Some(vec![b - b'a' + 1]) } else { None }
+            let b = c.to_ascii_uppercase() as u8;
+            if b.is_ascii() && (0x40..=0x5F).contains(&b) {
+                Some(vec![b & 0x1f])
+            } else {
+                None
+            }
         }
         KeyCode::Char(c) => {
             let mut buf = [0u8; 4];
