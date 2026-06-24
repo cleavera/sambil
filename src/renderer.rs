@@ -40,23 +40,27 @@ struct FrameBuffer {
 
 impl FrameBuffer {
     fn new(rows: u16, cols: u16) -> Self {
-        FrameBuffer { rows, cols, cells: vec![Cell::default(); (rows * cols) as usize] }
+        FrameBuffer { rows, cols, cells: vec![Cell::default(); rows as usize * cols as usize] }
     }
 
     fn set(&mut self, row: u16, col: u16, cell: Cell) {
         if row < self.rows && col < self.cols {
-            self.cells[(row * self.cols + col) as usize] = cell;
+            self.cells[row as usize * self.cols as usize + col as usize] = cell;
         }
     }
 
     fn set_text(&mut self, row: u16, col: u16, content: impl Into<String>) {
         if row < self.rows && col < self.cols {
-            self.cells[(row * self.cols + col) as usize].content = content.into();
+            self.cells[row as usize * self.cols as usize + col as usize].content = content.into();
         }
     }
 
-    fn get(&self, row: u16, col: u16) -> &Cell {
-        &self.cells[(row * self.cols + col) as usize]
+    fn get(&self, row: u16, col: u16) -> Option<&Cell> {
+        if row < self.rows && col < self.cols {
+            Some(&self.cells[row as usize * self.cols as usize + col as usize])
+        } else {
+            None
+        }
     }
 }
 
@@ -142,12 +146,12 @@ impl Renderer {
 
         for row in 0..next.rows {
             for col in 0..next.cols {
-                let new_cell = next.get(row, col);
-                let old_cell = if row < self.prev.rows && col < self.prev.cols {
-                    self.prev.get(row, col)
-                } else {
-                    &Cell::default()
+                let new_cell = match next.get(row, col) {
+                    Some(c) => c,
+                    None => continue,
                 };
+                let default_cell = Cell::default();
+                let old_cell = self.prev.get(row, col).unwrap_or(&default_cell);
 
                 if new_cell == old_cell {
                     cursor = None;
