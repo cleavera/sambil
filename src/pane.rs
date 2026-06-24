@@ -5,15 +5,32 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
-/// vt100 callbacks implementation that captures OSC 2 window title sequences.
+/// vt100 callbacks implementation that captures OSC 2 window title sequences
+/// and DECSCUSR cursor shape sequences.
 #[derive(Default)]
 pub struct TitleCallbacks {
     pub title: Option<String>,
+    pub cursor_style: u16, // DECSCUSR Ps: 0=default,1=blinking block,2=steady block,3=blinking underline,4=steady underline,5=blinking bar,6=steady bar
 }
 
 impl vt100::Callbacks for TitleCallbacks {
     fn set_window_title(&mut self, _screen: &mut vt100::Screen, title: &[u8]) {
         self.title = Some(String::from_utf8_lossy(title).into_owned());
+    }
+
+    fn unhandled_csi(
+        &mut self,
+        _screen: &mut vt100::Screen,
+        i1: Option<u8>,
+        _i2: Option<u8>,
+        params: &[&[u16]],
+        c: char,
+    ) {
+        // DECSCUSR: CSI Ps SP q — set cursor shape
+        if c == 'q' && i1 == Some(b' ') {
+            self.cursor_style =
+                params.first().and_then(|p| p.first()).copied().unwrap_or(0);
+        }
     }
 }
 

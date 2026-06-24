@@ -219,6 +219,15 @@ impl PaneManager {
         Ok(())
     }
 
+    pub fn active_pane_col_offset(&self) -> u16 {
+        let tab = &self.tabs[self.active_tab];
+        let mut offset = 0u16;
+        for i in 0..tab.active_pane {
+            offset += tab.panes[i].width + 1; // +1 for divider
+        }
+        offset
+    }
+
     pub fn active_cwd(&self) -> PathBuf {
         let tab = &self.tabs[self.active_tab];
         let pane = &tab.panes[tab.active_pane];

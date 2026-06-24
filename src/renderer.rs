@@ -4,6 +4,7 @@ use anyhow::Result;
 use crossterm::{
     cursor, queue,
     style::{Attribute, Color, Print, SetAttribute, SetBackgroundColor, SetForegroundColor},
+    cursor::SetCursorStyle,
 };
 
 use crate::pane::Pane;
@@ -103,8 +104,35 @@ impl Renderer {
             None => paint_tab_bar(&mut next, manager),
         }
 
+        queue!(out, cursor::Hide)?;
         self.flush_diff(out, &next)?;
         self.prev = next;
+
+        // Reposition the real terminal cursor after each frame.
+        if show_help || prompt.is_some() {
+            // Help overlay and text prompts use their own visual cursor — hide the real one.
+            queue!(out, cursor::Hide)?;
+        } else {
+            let col_offset = manager.active_pane_col_offset();
+            let tab = &manager.tabs[manager.active_tab];
+            let active_pane = &tab.panes[tab.active_pane];
+            let (cur_row, cur_col, hide, ps) = {
+                let parser = active_pane.parser.lock().unwrap();
+                let screen = parser.screen();
+                let (r, c) = screen.cursor_position();
+                let hide = screen.hide_cursor();
+                let ps = parser.callbacks().cursor_style;
+                (r, c, hide, ps)
+            };
+            if hide {
+                queue!(out, cursor::Hide)?;
+            } else {
+                queue!(out, cursor::MoveTo(cur_col + col_offset, cur_row + 1))?;
+                queue!(out, decscusr_to_crossterm(ps))?;
+                queue!(out, cursor::Show)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -173,6 +201,18 @@ fn vt100_color_to_crossterm(color: vt100::Color) -> Color {
         vt100::Color::Default => Color::Reset,
         vt100::Color::Idx(n) => Color::AnsiValue(n),
         vt100::Color::Rgb(r, g, b) => Color::Rgb { r, g, b },
+    }
+}
+
+fn decscusr_to_crossterm(ps: u16) -> SetCursorStyle {
+    match ps {
+        1 => SetCursorStyle::BlinkingBlock,
+        2 => SetCursorStyle::SteadyBlock,
+        3 => SetCursorStyle::BlinkingUnderScore,
+        4 => SetCursorStyle::SteadyUnderScore,
+        5 => SetCursorStyle::BlinkingBar,
+        6 => SetCursorStyle::SteadyBar,
+        _ => SetCursorStyle::DefaultUserShape,
     }
 }
 
