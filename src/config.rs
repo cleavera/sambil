@@ -28,6 +28,12 @@ impl Default for Config {
 }
 
 pub fn config_dir() -> PathBuf {
+    #[cfg(windows)]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            return PathBuf::from(appdata).join("sambil");
+        }
+    }
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         PathBuf::from(xdg).join("sambil")
     } else if let Ok(home) = std::env::var("HOME") {
