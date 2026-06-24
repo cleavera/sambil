@@ -6,6 +6,7 @@ use crossterm::{
     style::{Attribute, Color, Print, SetAttribute, SetBackgroundColor, SetForegroundColor},
     cursor::SetCursorStyle,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
@@ -168,7 +169,8 @@ impl Renderer {
                 }
 
                 queue!(out, Print(&new_cell.content))?;
-                cursor = Some((row, col + 1));
+                let char_width = UnicodeWidthStr::width(new_cell.content.as_str()).max(1) as u16;
+                cursor = Some((row, col + char_width));
             }
         }
 
