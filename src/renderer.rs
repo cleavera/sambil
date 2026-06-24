@@ -179,16 +179,30 @@ fn vt100_color_to_crossterm(color: vt100::Color) -> Color {
 fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: usize) {
     let tab = &manager.tabs[manager.active_tab];
     let n = tab.panes.len();
+    let mid_row = (buf.rows + 1) / 2; // vertical midpoint of content area
     let mut col_offset = 0u16;
     for (i, pane) in tab.panes.iter().enumerate() {
         let offset = if i == tab.active_pane { scroll_offset } else { 0 };
         paint_pane(buf, pane, col_offset, offset);
         col_offset += pane.width;
         if i + 1 < n {
+            // The indicator points toward the active pane.
+            let indicator = if i == tab.active_pane {
+                "◀"
+            } else if i + 1 == tab.active_pane {
+                "▶"
+            } else {
+                "│"
+            };
             for row in 1..buf.rows {
+                let (content, fg) = if row == mid_row && indicator != "│" {
+                    (indicator, vt100::Color::Idx(15))
+                } else {
+                    ("│", vt100::Color::Idx(8))
+                };
                 buf.set(row, col_offset, Cell {
-                    content: "│".to_string(),
-                    attrs: Attrs { fg: vt100::Color::Idx(8), ..Attrs::default() },
+                    content: content.to_string(),
+                    attrs: Attrs { fg, ..Attrs::default() },
                 });
             }
             col_offset += 1;
