@@ -299,6 +299,10 @@ impl PaneManager {
         self.tabs[self.active_tab].name = Some(name);
     }
 
+    pub fn revert_active_name(&mut self) {
+        self.tabs[self.active_tab].name = None;
+    }
+
     pub fn active_name(&self) -> String {
         self.tabs[self.active_tab].display_name()
     }
