@@ -19,9 +19,8 @@ impl PaneManager {
     pub fn new(cols: u16, rows: u16) -> Result<Self> {
         let pane_height = rows.saturating_sub(1);
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
-        let name = path_basename(&cwd);
         Ok(PaneManager {
-            panes: vec![Pane::spawn(name, &cwd, cols, pane_height)?],
+            panes: vec![Pane::spawn(&cwd, cols, pane_height)?],
             active: 0,
             cols,
             rows,
@@ -84,10 +83,18 @@ impl PaneManager {
         !self.pending_close.is_empty()
     }
 
-    pub fn open_tab(&mut self, name: String) -> Result<()> {
+    /// Opens a new auto-named tab (name derived from cwd/OSC 2 at render time).
+    pub fn open_tab(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
-        self.panes.push(Pane::spawn(name, &cwd, self.cols, self.rows.saturating_sub(1))?);
+        self.panes.push(Pane::spawn(&cwd, self.cols, self.rows.saturating_sub(1))?);
         self.active = self.panes.len() - 1;
+        Ok(())
+    }
+
+    /// Opens a new tab with an explicit user-provided name (immune to OSC 2 overrides).
+    pub fn open_tab_named(&mut self, name: String) -> Result<()> {
+        self.open_tab()?;
+        self.panes[self.active].name = Some(name);
         Ok(())
     }
 
@@ -106,11 +113,11 @@ impl PaneManager {
     }
 
     pub fn rename_active(&mut self, name: String) {
-        self.panes[self.active].name = name;
+        self.panes[self.active].name = Some(name);
     }
 
-    pub fn active_name(&self) -> &str {
-        &self.panes[self.active].name
+    pub fn active_name(&self) -> String {
+        self.panes[self.active].display_name()
     }
 
     pub fn write_active(&mut self, data: &[u8]) -> Result<()> {

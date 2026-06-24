@@ -113,31 +113,13 @@ session.screen().tab_count()
 - [x] Help overlay (`Ctrl-b ?`, dynamic leader key display)
 - [x] Nested instance prevention (`$SAMBIL` env var guard)
 - [x] Configurable leader key (`config.toml` written on first launch with comments)
+- [x] Terminal resize handling (`Event::Resize` → PTY resize → renderer invalidate)
 
 ---
 
 ## Upcoming Phases
 
-### Phase 11 — Terminal resize handling
-When the terminal window is resized, sambil must respond to the crossterm `Event::Resize` event,
-update the `PaneManager` dimensions, resize each PTY via `portable-pty`'s `resize` API, and
-invalidate the renderer's diff buffer so the next frame redraws fully.
-
-Without this, resizing the terminal corrupts the layout and is immediately painful in daily use.
-
-Red/green: test that after a resize event sambil re-renders correctly at the new dimensions.
-
-### Phase 12 — Copy mode (text selection and copy from scrollback)
-Extend the existing `ScrollBack` input mode to support text selection. The user marks a start
-position, moves to an end position, and copies the selected region to the system clipboard (via
-`arboard` or falling back to OSC 52 escape sequences for cross-platform support).
-
-This is the last critical missing feature before comfortable daily use.
-
-Red/green: test that text selected in scroll mode is available on the clipboard after the copy
-command.
-
-### Phase 13 — Window title → tab name passthrough (nice to have)
+### Phase 12 — Window title → tab name passthrough (nice to have)
 When a child process sets the terminal window title (OSC 2 / `\e]2;title\a`), rather than passing
 it through to the host terminal (which would overwrite the whole window title), use it to update
 the active tab's name — but only if the tab still has its auto-generated cwd name (i.e. the user
@@ -145,10 +127,12 @@ hasn't manually renamed it). This makes tools like `gitui` automatically label t
 
 Red/green: test that an OSC 2 sequence from the shell updates the tab name in the bar.
 
-### Phase 14 — Splits (intentionally deferred)
+### Phase 13 — Splits (intentionally deferred)
 Vertical and horizontal pane splits within a tab, zoom to fullscreen, resize splits. This is the
 most complex remaining feature and is deliberately left until the single-pane workflow has been
-proven in daily use.
+proven in daily use. Copy mode (text selection) will be revisited as part of this phase, since the
+main motivation for it (broken native terminal selection) only arises once mouse capture or splits
+are introduced.
 
 ---
 

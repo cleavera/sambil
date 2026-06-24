@@ -97,7 +97,7 @@ fn handle_key(
                 manager.undo_close();
             }
             KeyCode::Char('c') => {
-                manager.open_tab(manager.active_cwd_name())?;
+                manager.open_tab()?;
                 return Ok(InputMode::Normal);
             }
             KeyCode::Char('C') => return Ok(InputMode::Naming(String::new())),
@@ -117,8 +117,11 @@ fn handle_key(
 
         InputMode::Naming(mut buf) => match code {
             KeyCode::Enter => {
-                let name = if buf.is_empty() { manager.active_cwd_name() } else { buf };
-                manager.open_tab(name)?;
+                if buf.is_empty() {
+                    manager.open_tab()?;
+                } else {
+                    manager.open_tab_named(buf)?;
+                }
                 return Ok(InputMode::Normal);
             }
             KeyCode::Esc => return Ok(InputMode::Normal),
@@ -135,8 +138,11 @@ fn handle_key(
 
         InputMode::Renaming(mut buf) => match code {
             KeyCode::Enter => {
-                let name = if buf.is_empty() { manager.active_cwd_name() } else { buf };
-                manager.rename_active(name);
+                if buf.is_empty() {
+                    manager.panes[manager.active].name = None; // revert to auto-named
+                } else {
+                    manager.rename_active(buf);
+                }
                 return Ok(InputMode::Normal);
             }
             KeyCode::Esc => return Ok(InputMode::Normal),

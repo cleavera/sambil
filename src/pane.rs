@@ -5,20 +5,35 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
+/// vt100 callbacks implementation that captures OSC 2 window title sequences.
+#[derive(Default)]
+pub struct TitleCallbacks {
+    pub title: Option<String>,
+}
+
+impl vt100::Callbacks for TitleCallbacks {
+    fn set_window_title(&mut self, _screen: &mut vt100::Screen, title: &[u8]) {
+        self.title = Some(String::from_utf8_lossy(title).into_owned());
+    }
+}
+
 pub struct Pane {
-    pub name: String,
+    /// Explicit user-set name. `None` means auto-named: display is derived
+    /// from the OSC 2 window title (if any) and the cwd basename.
+    pub name: Option<String>,
     pub width: u16,
     pub height: u16,
     writer: Box<dyn Write + Send>,
-    pub parser: Arc<Mutex<vt100::Parser>>,
+    pub parser: Arc<Mutex<vt100::Parser<TitleCallbacks>>>,
     pub child_pid: Option<u32>,
     pub exited: Arc<AtomicBool>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     master: Box<dyn portable_pty::MasterPty + Send>,
+    pub cwd: std::path::PathBuf,
 }
 
 impl Pane {
-    pub fn spawn(name: String, cwd: &std::path::Path, width: u16, height: u16) -> Result<Self> {
+    pub fn spawn(cwd: &std::path::Path, width: u16, height: u16) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows: height,
@@ -39,7 +54,9 @@ impl Pane {
         let writer = pair.master.take_writer()?;
         let mut reader = pair.master.try_clone_reader()?;
 
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(height, width, 1000)));
+        let parser = Arc::new(Mutex::new(
+            vt100::Parser::new_with_callbacks(height, width, 1000, TitleCallbacks::default()),
+        ));
         let parser_clone = Arc::clone(&parser);
         let exited = Arc::new(AtomicBool::new(false));
         let exited_clone = Arc::clone(&exited);
@@ -57,7 +74,37 @@ impl Pane {
             exited_clone.store(true, Ordering::Relaxed);
         });
 
-        Ok(Pane { name, width, height, writer, parser, child_pid, exited, _child: child, master: pair.master })
+        Ok(Pane {
+            name: None,
+            width,
+            height,
+            writer,
+            parser,
+            child_pid,
+            exited,
+            _child: child,
+            master: pair.master,
+            cwd: cwd.to_path_buf(),
+        })
+    }
+
+    /// The display name shown in the tab bar.
+    /// - Explicit name (`Some`) is shown as-is.
+    /// - Auto-named (`None`): `title/cwd` if an OSC 2 title is set, otherwise just `cwd`.
+    pub fn display_name(&self) -> String {
+        if let Some(ref name) = self.name {
+            return name.clone();
+        }
+        let cwd = crate::pane_manager::path_basename(&self.cwd);
+        match self.parser.lock().unwrap().callbacks().title.as_deref() {
+            Some(title) if !title.is_empty() => title.to_string(),
+            _ => cwd,
+        }
+    }
+
+    /// Returns the latest OSC 2 title emitted by the child, if any.
+    pub fn window_title(&self) -> Option<String> {
+        self.parser.lock().unwrap().callbacks().title.clone()
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
@@ -78,3 +125,4 @@ impl Pane {
         Ok(())
     }
 }
+

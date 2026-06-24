@@ -227,7 +227,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     for (i, pane) in manager.panes.iter().enumerate() {
         let is_active = i == manager.active;
         let indicator = if is_active { "●".to_string() } else { (i + 1).to_string() };
-        let label = format!(" [{}:{}] ", indicator, pane.name);
+        let label = format!(" [{}:{}] ", indicator, pane.display_name());
         let attrs = Attrs {
             fg: if is_active { active_fg } else { inactive_fg },
             bg: if is_active { active_bg } else { bar_bg },
