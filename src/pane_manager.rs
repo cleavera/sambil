@@ -222,7 +222,7 @@ impl PaneManager {
         let new_n = self.tabs[self.active_tab].panes.len() + 1;
         let available = self.cols.saturating_sub((new_n as u16).saturating_sub(1));
         let base_w = (available / new_n as u16).max(1);
-        let last_w = (available - base_w * (new_n as u16 - 1)).max(1);
+        let last_w = available.saturating_sub(base_w * (new_n as u16 - 1)).max(1);
 
         for pane in self.tabs[self.active_tab].panes.iter_mut() {
             pane.resize(base_w, height)?;
@@ -256,7 +256,7 @@ impl PaneManager {
         let height = self.rows.saturating_sub(1);
         let available = self.cols.saturating_sub((n as u16).saturating_sub(1));
         let base_w = (available / n as u16).max(1);
-        let last_w = (available - base_w * (n as u16 - 1)).max(1);
+        let last_w = available.saturating_sub(base_w * (n as u16 - 1)).max(1);
         for (i, pane) in self.tabs[tab_idx].panes.iter_mut().enumerate() {
             let w = if i == n - 1 { last_w } else { base_w };
             pane.resize(w, height)?;
