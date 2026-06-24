@@ -244,7 +244,7 @@ impl PaneManager {
     pub fn focus_prev_pane(&mut self) {
         let tab = &mut self.tabs[self.active_tab];
         let n = tab.panes.len();
-        tab.active_pane = tab.active_pane.checked_sub(1).unwrap_or(n - 1);
+        tab.active_pane = tab.active_pane.checked_sub(1).unwrap_or(n.saturating_sub(1));
     }
 
     /// Recalculates and applies even widths to all panes in a tab.
@@ -325,7 +325,7 @@ impl PaneManager {
     }
 
     pub fn switch_to_prev(&mut self) {
-        self.active_tab = self.active_tab.checked_sub(1).unwrap_or(self.tabs.len() - 1);
+        self.active_tab = self.active_tab.checked_sub(1).unwrap_or(self.tabs.len().saturating_sub(1));
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) -> Result<()> {
