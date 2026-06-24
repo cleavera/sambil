@@ -171,10 +171,11 @@ fn handle_key(
 
         InputMode::ScrollBack(offset) => {
             let page = manager.rows.saturating_sub(1) as usize;
+            const MAX_SCROLLBACK: usize = 1000;
             match code {
-                KeyCode::Up => return Ok(InputMode::ScrollBack(offset + 1)),
+                KeyCode::Up => return Ok(InputMode::ScrollBack(offset.saturating_add(1).min(MAX_SCROLLBACK))),
                 KeyCode::Down => return Ok(InputMode::ScrollBack(offset.saturating_sub(1))),
-                KeyCode::PageUp => return Ok(InputMode::ScrollBack(offset + page)),
+                KeyCode::PageUp => return Ok(InputMode::ScrollBack(offset.saturating_add(page).min(MAX_SCROLLBACK))),
                 KeyCode::PageDown => {
                     return Ok(InputMode::ScrollBack(offset.saturating_sub(page)));
                 }
