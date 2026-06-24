@@ -1,14 +1,18 @@
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
 use crate::pane::Pane;
+
+const UNDO_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct PaneManager {
     pub panes: Vec<Pane>,
     pub active: usize,
     pub cols: u16,
     pub rows: u16,
+    pending_close: Vec<(Pane, Instant)>,
 }
 
 impl PaneManager {
@@ -21,6 +25,7 @@ impl PaneManager {
             active: 0,
             cols,
             rows,
+            pending_close: vec![],
         })
     }
 
@@ -46,15 +51,37 @@ impl PaneManager {
     }
 
     /// Closes the active tab. Returns `true` if it was the last tab (caller should quit).
+    /// Otherwise the pane is held in a pending queue for up to 10 seconds so it can be undone.
     pub fn close_active_tab(&mut self) -> bool {
         if self.panes.len() == 1 {
             return true;
         }
-        self.panes.remove(self.active);
+        let pane = self.panes.remove(self.active);
+        self.pending_close.push((pane, Instant::now()));
         if self.active >= self.panes.len() {
             self.active = self.panes.len() - 1;
         }
         false
+    }
+
+    /// Restores the most recently closed tab. Returns `true` if a tab was restored.
+    pub fn undo_close(&mut self) -> bool {
+        if let Some((pane, _)) = self.pending_close.pop() {
+            self.panes.push(pane);
+            self.active = self.panes.len() - 1;
+            return true;
+        }
+        false
+    }
+
+    /// Drops any pending-close panes that have exceeded the undo timeout.
+    pub fn reap_pending_close(&mut self) {
+        self.pending_close.retain(|(_, closed_at)| closed_at.elapsed() < UNDO_TIMEOUT);
+    }
+
+    /// Returns `true` if there are tabs waiting in the undo queue.
+    pub fn has_pending_close(&self) -> bool {
+        !self.pending_close.is_empty()
     }
 
     pub fn open_tab(&mut self, name: String) -> Result<()> {

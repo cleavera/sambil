@@ -47,6 +47,7 @@ pub fn event_loop<W: Write>(
             if manager.close_exited_tabs() {
                 return Ok(());
             }
+            manager.reap_pending_close();
             continue;
         }
 
@@ -91,6 +92,9 @@ fn handle_key(
                 if manager.close_active_tab() {
                     return Ok(InputMode::Quit);
                 }
+            }
+            KeyCode::Char('u') => {
+                manager.undo_close();
             }
             KeyCode::Char('c') => {
                 manager.open_tab(manager.active_cwd_name())?;

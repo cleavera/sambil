@@ -240,6 +240,19 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
             col += 1;
         }
     }
+
+    // Undo hint — right-aligned when a closed tab is pending.
+    if manager.has_pending_close() {
+        let hint = " ↩ u ";
+        let hint_col = manager.cols.saturating_sub(hint.chars().count() as u16);
+        let hint_attrs = Attrs { fg: vt100::Color::Idx(11), ..Attrs::default() };
+        for (offset, ch) in hint.chars().enumerate() {
+            let c = hint_col + offset as u16;
+            if c < manager.cols {
+                buf.set(row, c, Cell { content: ch.to_string(), attrs: hint_attrs.clone() });
+            }
+        }
+    }
 }
 
 fn paint_prompt(buf: &mut FrameBuffer, _manager: &PaneManager, text: &str) {
@@ -259,6 +272,7 @@ fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
         ("c",   "New tab (cwd name)"),
         ("C",   "New tab (enter name)"),
         ("x",   "Close tab"),
+        ("u",   "Undo close tab"),
         ("r",   "Rename tab"),
         ("n",   "Next tab"),
         ("p",   "Previous tab"),
