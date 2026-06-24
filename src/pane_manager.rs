@@ -59,6 +59,15 @@ pub struct Tab {
     pub name: Option<String>,
 }
 
+/// Returns `(base_w, last_w)` — the width for all-but-last panes and the last pane,
+/// given `total_cols` and `n` panes separated by single-column dividers.
+fn pane_widths(total_cols: u16, n: usize) -> (u16, u16) {
+    let available = total_cols.saturating_sub((n as u16).saturating_sub(1));
+    let base_w = (available / n as u16).max(1);
+    let last_w = available.saturating_sub(base_w * (n as u16 - 1)).max(1);
+    (base_w, last_w)
+}
+
 impl Tab {
     pub fn new(pane: Pane) -> Self {
         Tab { panes: vec![pane], active_pane: 0, name: None }
@@ -219,19 +228,10 @@ impl PaneManager {
     pub fn split_horizontal(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
         let height = self.rows.saturating_sub(1);
-        let new_n = self.tabs[self.active_tab].panes.len() + 1;
-        let available = self.cols.saturating_sub((new_n as u16).saturating_sub(1));
-        let base_w = (available / new_n as u16).max(1);
-        let last_w = available.saturating_sub(base_w * (new_n as u16 - 1)).max(1);
-
-        for pane in self.tabs[self.active_tab].panes.iter_mut() {
-            pane.resize(base_w, height)?;
-        }
-
-        let new_pane = Pane::spawn(&cwd, last_w, height)?;
+        let new_pane = Pane::spawn(&cwd, 1, height)?;
         self.tabs[self.active_tab].panes.push(new_pane);
         self.tabs[self.active_tab].active_pane = self.tabs[self.active_tab].panes.len() - 1;
-        Ok(())
+        self.resize_tab_panes(self.active_tab)
     }
 
     /// Moves focus to the next pane in the active tab (wraps around).
@@ -254,9 +254,7 @@ impl PaneManager {
             return Ok(());
         }
         let height = self.rows.saturating_sub(1);
-        let available = self.cols.saturating_sub((n as u16).saturating_sub(1));
-        let base_w = (available / n as u16).max(1);
-        let last_w = available.saturating_sub(base_w * (n as u16 - 1)).max(1);
+        let (base_w, last_w) = pane_widths(self.cols, n);
         for (i, pane) in self.tabs[tab_idx].panes.iter_mut().enumerate() {
             let w = if i == n - 1 { last_w } else { base_w };
             pane.resize(w, height)?;
