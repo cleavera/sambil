@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::pane::{path_basename, Pane};
-use crate::size::TerminalSize;
+use crate::size::{ContentArea, TerminalSize};
 
 #[cfg(target_os = "macos")]
 mod macos_cwd {
@@ -60,14 +60,6 @@ pub struct Tab {
     pub name: Option<String>,
 }
 
-/// Returns `(base_w, last_w)` — the width for all-but-last panes and the last pane,
-/// given `total_cols` and `n` panes separated by single-column dividers.
-fn pane_widths(total_cols: u16, n: usize) -> (u16, u16) {
-    let available = total_cols.saturating_sub((n as u16).saturating_sub(1));
-    let base_w = (available / n as u16).max(1);
-    let last_w = available.saturating_sub(base_w * (n as u16 - 1)).max(1);
-    (base_w, last_w)
-}
 
 impl Tab {
     pub fn new(pane: Pane) -> Self {
@@ -94,11 +86,10 @@ pub struct PaneManager {
 
 impl PaneManager {
     pub fn new(size: TerminalSize) -> Result<Self> {
-        let pane_height = size.rows().saturating_sub(1);
-        let pane_size = TerminalSize::new_clamped(size.cols(), pane_height);
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+        let pane = Pane::spawn(&cwd, ContentArea::from(size).full_size())?;
         Ok(PaneManager {
-            tabs: vec![Tab::new(Pane::spawn(&cwd, pane_size)?)],
+            tabs: vec![Tab::new(pane)],
             active_tab: 0,
             size,
             pending_close: vec![],
@@ -211,7 +202,7 @@ impl PaneManager {
     /// Opens a new auto-named tab.
     pub fn open_tab(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
-        let pane_size = TerminalSize::new_clamped(self.size.cols(), self.size.rows().saturating_sub(1));
+        let pane_size = ContentArea::from(self.size).full_size();
         let pane = Pane::spawn(&cwd, pane_size)?;
         self.tabs.push(Tab::new(pane));
         self.active_tab = self.tabs.len() - 1;
@@ -228,8 +219,7 @@ impl PaneManager {
     /// Splits the active tab horizontally, adding a new pane to the right.
     pub fn split_horizontal(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
-        let height = self.size.rows().saturating_sub(1);
-        let new_pane = Pane::spawn(&cwd, TerminalSize::new_clamped(1, height))?;
+        let new_pane = Pane::spawn(&cwd, ContentArea::from(self.size).full_size())?;
         self.tabs[self.active_tab].panes.push(new_pane);
         self.tabs[self.active_tab].active_pane = self.tabs[self.active_tab].panes.len() - 1;
         self.resize_tab_panes(self.active_tab)
@@ -251,14 +241,10 @@ impl PaneManager {
     /// Recalculates and applies even widths to all panes in a tab.
     fn resize_tab_panes(&mut self, tab_idx: usize) -> Result<()> {
         let n = self.tabs[tab_idx].panes.len();
-        if n == 0 {
-            return Ok(());
-        }
-        let height = self.size.rows().saturating_sub(1);
-        let (base_w, last_w) = pane_widths(self.size.cols(), n);
-        for (i, pane) in self.tabs[tab_idx].panes.iter_mut().enumerate() {
-            let w = if i == n - 1 { last_w } else { base_w };
-            pane.resize(TerminalSize::new_clamped(w, height))?;
+        if n == 0 { return Ok(()); }
+        let sizes = ContentArea::from(self.size).split_horizontal(n);
+        for (pane, size) in self.tabs[tab_idx].panes.iter_mut().zip(sizes) {
+            pane.resize(size)?;
         }
         Ok(())
     }

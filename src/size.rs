@@ -36,3 +36,57 @@ impl Rows {
 impl From<Rows> for usize {
     fn from(r: Rows) -> usize { r.0 as usize }
 }
+
+/// The drawable area available for panes — the terminal minus the tab bar row.
+/// Guaranteed to be at least 1×1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ContentArea {
+    cols: u16,
+    rows: u16,
+}
+
+impl ContentArea {
+    pub fn cols(&self) -> u16 { self.cols }
+    pub fn rows(&self) -> u16 { self.rows }
+
+    /// The size of a single full-width pane occupying the entire content area.
+    pub fn full_size(&self) -> PaneSize {
+        PaneSize { cols: self.cols, rows: self.rows }
+    }
+
+    /// Divides the content area evenly into `n` panes separated by 1-column dividers.
+    /// Returns one `PaneSize` per pane; the last pane absorbs any remainder columns.
+    pub fn split_horizontal(&self, n: usize) -> Vec<PaneSize> {
+        if n == 0 { return vec![]; }
+        let n16 = n as u16;
+        let available = self.cols.saturating_sub(n16.saturating_sub(1));
+        let base_w = (available / n16).max(1);
+        let last_w = available.saturating_sub(base_w * (n16 - 1)).max(1);
+        (0..n).map(|i| PaneSize {
+            cols: if i == n - 1 { last_w } else { base_w },
+            rows: self.rows,
+        }).collect()
+    }
+}
+
+impl From<TerminalSize> for ContentArea {
+    fn from(size: TerminalSize) -> ContentArea {
+        ContentArea {
+            cols: size.cols,
+            rows: size.rows.saturating_sub(1).max(1),
+        }
+    }
+}
+
+/// The dimensions of a single pane within the content area.
+/// Guaranteed to be at least 1×1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaneSize {
+    cols: u16,
+    rows: u16,
+}
+
+impl PaneSize {
+    pub fn cols(&self) -> u16 { self.cols }
+    pub fn rows(&self) -> u16 { self.rows }
+}

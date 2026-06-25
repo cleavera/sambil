@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
-use crate::size::TerminalSize;
+use crate::size::PaneSize;
 
 /// vt100 callbacks implementation that captures OSC 2 window title sequences
 /// and DECSCUSR cursor shape sequences.
@@ -49,7 +49,7 @@ pub struct Pane {
 }
 
 impl Pane {
-    pub fn spawn(cwd: &std::path::Path, size: TerminalSize) -> Result<Self> {
+    pub fn spawn(cwd: &std::path::Path, size: PaneSize) -> Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows: size.rows(),
@@ -117,7 +117,7 @@ impl Pane {
         Ok(())
     }
 
-    pub fn resize(&mut self, size: TerminalSize) -> Result<()> {
+    pub fn resize(&mut self, size: PaneSize) -> Result<()> {
         self.width = size.cols();
         self.height = size.rows();
         self.master.resize(portable_pty::PtySize {
