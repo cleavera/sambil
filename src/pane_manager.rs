@@ -54,6 +54,99 @@ mod macos_cwd {
 
 const UNDO_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TabIndex(usize);
+
+impl From<usize> for TabIndex {
+    fn from(n: usize) -> Self { TabIndex(n) }
+}
+
+impl From<TabIndex> for usize {
+    fn from(t: TabIndex) -> usize { t.0 }
+}
+
+/// Owns the tab list and active-tab invariant: `active` is always a valid index.
+pub struct TabSet {
+    tabs: Vec<Tab>,
+    active: usize,
+}
+
+impl TabSet {
+    pub fn new(first: Tab) -> Self {
+        TabSet { tabs: vec![first], active: 0 }
+    }
+
+    pub fn active(&self) -> &Tab {
+        &self.tabs[self.active]
+    }
+
+    pub fn active_mut(&mut self) -> &mut Tab {
+        &mut self.tabs[self.active]
+    }
+
+    pub fn active_index(&self) -> TabIndex {
+        TabIndex::from(self.active)
+    }
+
+    pub fn len(&self) -> usize {
+        self.tabs.len()
+    }
+
+    /// Iterates over all tabs as `(is_active, &Tab)`.
+    pub fn iter(&self) -> impl Iterator<Item = (bool, &Tab)> {
+        let active = self.active;
+        self.tabs.iter().enumerate().map(move |(i, tab)| (i == active, tab))
+    }
+
+    /// Appends a tab and makes it active.
+    pub fn push_and_activate(&mut self, tab: Tab) {
+        self.tabs.push(tab);
+        self.active = self.tabs.len() - 1;
+    }
+
+    pub fn switch_to(&mut self, index: TabIndex) -> bool {
+        let i = usize::from(index);
+        if i < self.tabs.len() { self.active = i; true } else { false }
+    }
+
+    pub fn switch_next(&mut self) {
+        self.active = (self.active + 1) % self.tabs.len();
+    }
+
+    pub fn switch_prev(&mut self) {
+        self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len().saturating_sub(1));
+    }
+
+    /// Removes the active tab. Returns `None` if it is the last tab (nothing removed).
+    pub fn remove_active(&mut self) -> Option<Tab> {
+        if self.tabs.len() == 1 { return None; }
+        let tab = self.tabs.remove(self.active);
+        if self.active >= self.tabs.len() {
+            self.active = self.tabs.len() - 1;
+        }
+        Some(tab)
+    }
+
+    /// Removes the tab at a raw index, adjusting `active` to remain valid.
+    pub fn remove_at(&mut self, idx: usize) -> Tab {
+        let tab = self.tabs.remove(idx);
+        if self.active >= self.tabs.len() {
+            self.active = self.tabs.len().saturating_sub(1);
+        } else if self.active > idx {
+            self.active -= 1;
+        }
+        tab
+    }
+
+    pub fn get(&self, idx: usize) -> Option<&Tab> {
+        self.tabs.get(idx)
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut Tab> {
+        self.tabs.get_mut(idx)
+    }
+}
+
 pub struct Tab {
     pub panes: Vec<Pane>,
     pub active_pane: usize,
@@ -78,8 +171,7 @@ impl Tab {
 }
 
 pub struct PaneManager {
-    pub tabs: Vec<Tab>,
-    pub active_tab: usize,
+    pub tabs: TabSet,
     pub size: TerminalSize,
     pending_close: Vec<(Tab, Instant)>,
 }
@@ -89,8 +181,7 @@ impl PaneManager {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
         let pane = Pane::spawn(&cwd, ContentArea::from(size).full_size())?;
         Ok(PaneManager {
-            tabs: vec![Tab::new(pane)],
-            active_tab: 0,
+            tabs: TabSet::new(Tab::new(pane)),
             size,
             pending_close: vec![],
         })
@@ -103,7 +194,7 @@ impl PaneManager {
             // Remove non-last exited panes from this tab.
             let mut changed = false;
             {
-                let tab = &mut self.tabs[ti];
+                let tab = self.tabs.get_mut(ti).unwrap();
                 let mut pi = 0;
                 while pi < tab.panes.len().saturating_sub(1) {
                     if tab.panes[pi].exited.load(Ordering::Relaxed) {
@@ -124,22 +215,14 @@ impl PaneManager {
             }
 
             // Check if the tab's last pane has exited.
-            let last_exited = self.tabs[ti]
-                .panes
-                .last()
+            let last_exited = self.tabs.get(ti)
+                .and_then(|t| t.panes.last())
                 .map(|p| p.exited.load(Ordering::Relaxed))
                 .unwrap_or(false);
 
             if last_exited {
-                if self.tabs.len() == 1 {
-                    return true;
-                }
-                self.tabs.remove(ti);
-                if self.active_tab >= self.tabs.len() {
-                    self.active_tab = self.tabs.len() - 1;
-                } else if self.active_tab > ti {
-                    self.active_tab -= 1;
-                }
+                if self.tabs.len() == 1 { return true; }
+                self.tabs.remove_at(ti);
             } else {
                 ti += 1;
             }
@@ -152,14 +235,15 @@ impl PaneManager {
     /// If it was the last pane, the whole tab is closed (with undo unless last tab).
     /// Returns `true` if the last tab was closed (caller should quit).
     pub fn close_active_pane(&mut self) -> bool {
-        if self.tabs[self.active_tab].panes.len() > 1 {
-            let pi = self.tabs[self.active_tab].active_pane;
-            self.tabs[self.active_tab].panes.remove(pi);
-            let tab = &mut self.tabs[self.active_tab];
+        if self.tabs.active().panes.len() > 1 {
+            let pi = self.tabs.active().active_pane;
+            self.tabs.active_mut().panes.remove(pi);
+            let tab = self.tabs.active_mut();
             if tab.active_pane >= tab.panes.len() {
                 tab.active_pane = tab.panes.len() - 1;
             }
-            let _ = self.resize_tab_panes(self.active_tab);
+            let at = usize::from(self.tabs.active_index());
+            let _ = self.resize_tab_panes(at);
             false
         } else {
             self.close_active_tab()
@@ -168,22 +252,18 @@ impl PaneManager {
 
     /// Closes the entire active tab (all its panes). Returns `true` if it was the last tab.
     fn close_active_tab(&mut self) -> bool {
-        if self.tabs.len() == 1 {
-            return true;
+        if let Some(tab) = self.tabs.remove_active() {
+            self.pending_close.push((tab, Instant::now()));
+            false
+        } else {
+            true // last tab, nothing removed
         }
-        let tab = self.tabs.remove(self.active_tab);
-        self.pending_close.push((tab, Instant::now()));
-        if self.active_tab >= self.tabs.len() {
-            self.active_tab = self.tabs.len() - 1;
-        }
-        false
     }
 
     /// Restores the most recently closed tab. Returns `true` if a tab was restored.
     pub fn undo_close(&mut self) -> bool {
         if let Some((tab, _)) = self.pending_close.pop() {
-            self.tabs.push(tab);
-            self.active_tab = self.tabs.len() - 1;
+            self.tabs.push_and_activate(tab);
             return true;
         }
         false
@@ -204,53 +284,53 @@ impl PaneManager {
         let cwd = self.active_cwd();
         let pane_size = ContentArea::from(self.size).full_size();
         let pane = Pane::spawn(&cwd, pane_size)?;
-        self.tabs.push(Tab::new(pane));
-        self.active_tab = self.tabs.len() - 1;
+        self.tabs.push_and_activate(Tab::new(pane));
         Ok(())
     }
 
-    /// Opens a new tab with an explicit user-provided name (immune to OSC 2 overrides).
     pub fn open_tab_named(&mut self, name: String) -> Result<()> {
         self.open_tab()?;
-        self.tabs[self.active_tab].name = Some(name);
+        self.tabs.active_mut().name = Some(name);
         Ok(())
     }
 
-    /// Splits the active tab horizontally, adding a new pane to the right.
     pub fn split_horizontal(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
         let new_pane = Pane::spawn(&cwd, ContentArea::from(self.size).full_size())?;
-        self.tabs[self.active_tab].panes.push(new_pane);
-        self.tabs[self.active_tab].active_pane = self.tabs[self.active_tab].panes.len() - 1;
-        self.resize_tab_panes(self.active_tab)
+        self.tabs.active_mut().panes.push(new_pane);
+        let n = self.tabs.active().panes.len();
+        self.tabs.active_mut().active_pane = n - 1;
+        let at = usize::from(self.tabs.active_index());
+        self.resize_tab_panes(at)
     }
 
-    /// Moves focus to the next pane in the active tab (wraps around).
     pub fn focus_next_pane(&mut self) {
-        let tab = &mut self.tabs[self.active_tab];
+        let tab = self.tabs.active_mut();
         tab.active_pane = (tab.active_pane + 1) % tab.panes.len();
     }
 
-    /// Moves focus to the previous pane in the active tab (wraps around).
     pub fn focus_prev_pane(&mut self) {
-        let tab = &mut self.tabs[self.active_tab];
+        let tab = self.tabs.active_mut();
         let n = tab.panes.len();
         tab.active_pane = tab.active_pane.checked_sub(1).unwrap_or(n.saturating_sub(1));
     }
 
-    /// Recalculates and applies even widths to all panes in a tab.
     fn resize_tab_panes(&mut self, tab_idx: usize) -> Result<()> {
-        let n = self.tabs[tab_idx].panes.len();
+        let tab = match self.tabs.get_mut(tab_idx) {
+            Some(t) => t,
+            None => return Ok(()),
+        };
+        let n = tab.panes.len();
         if n == 0 { return Ok(()); }
         let sizes = ContentArea::from(self.size).split_horizontal(n);
-        for (pane, size) in self.tabs[tab_idx].panes.iter_mut().zip(sizes) {
+        for (pane, size) in tab.panes.iter_mut().zip(sizes) {
             pane.resize(size)?;
         }
         Ok(())
     }
 
     pub fn active_pane_col_offset(&self) -> ColOffset {
-        let tab = &self.tabs[self.active_tab];
+        let tab = self.tabs.active();
         let mut offset = ColOffset::zero();
         for i in 0..tab.active_pane {
             offset = offset.advance_past_pane(tab.panes[i].width);
@@ -259,7 +339,7 @@ impl PaneManager {
     }
 
     pub fn active_cwd(&self) -> PathBuf {
-        let tab = &self.tabs[self.active_tab];
+        let tab = self.tabs.active();
         let pane = &tab.panes[tab.active_pane];
         #[cfg(target_os = "linux")]
         if let Some(pid) = pane.child_pid {
@@ -281,40 +361,38 @@ impl PaneManager {
     }
 
     pub fn rename_active(&mut self, name: String) {
-        self.tabs[self.active_tab].name = Some(name);
+        self.tabs.active_mut().name = Some(name);
     }
 
     pub fn revert_active_name(&mut self) {
-        self.tabs[self.active_tab].name = None;
+        self.tabs.active_mut().name = None;
     }
 
     pub fn active_name(&self) -> String {
-        self.tabs[self.active_tab].display_name()
+        self.tabs.active().display_name()
     }
 
     pub fn write_active(&mut self, data: &[u8]) -> Result<()> {
-        let ti = self.active_tab;
-        let pi = self.tabs[ti].active_pane;
-        self.tabs[ti].panes[pi].write(data)
+        let tab = self.tabs.active_mut();
+        let pi = tab.active_pane;
+        tab.panes[pi].write(data)
     }
 
     pub fn active_bracketed_paste(&self) -> bool {
-        let tab = &self.tabs[self.active_tab];
+        let tab = self.tabs.active();
         tab.panes[tab.active_pane].parser.lock().unwrap().screen().bracketed_paste()
     }
 
-    pub fn switch_to(&mut self, index: usize) {
-        if index < self.tabs.len() {
-            self.active_tab = index;
-        }
+    pub fn switch_to(&mut self, index: TabIndex) {
+        self.tabs.switch_to(index);
     }
 
     pub fn switch_to_next(&mut self) {
-        self.active_tab = (self.active_tab + 1) % self.tabs.len();
+        self.tabs.switch_next();
     }
 
     pub fn switch_to_prev(&mut self) {
-        self.active_tab = self.active_tab.checked_sub(1).unwrap_or(self.tabs.len().saturating_sub(1));
+        self.tabs.switch_prev();
     }
 
     pub fn resize(&mut self, size: TerminalSize) -> Result<()> {

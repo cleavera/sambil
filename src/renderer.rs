@@ -122,7 +122,7 @@ impl Renderer {
             queue!(out, Hide)?;
         } else {
             let col_offset = manager.active_pane_col_offset();
-            let tab = &manager.tabs[manager.active_tab];
+            let tab = manager.tabs.active();
             let active_pane = &tab.panes[tab.active_pane];
             let (cur_row, cur_col, hide, ps) = {
                 let parser = active_pane.parser.lock().unwrap();
@@ -226,7 +226,7 @@ fn cursor_style_to_crossterm(style: CursorStyle) -> SetCursorStyle {
 }
 
 fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: ScrollOffset) {
-    let tab = &manager.tabs[manager.active_tab];
+    let tab = manager.tabs.active();
     let n = tab.panes.len();
     let mid_row = (buf.size.rows() + 1) / 2; // vertical midpoint of content area
     let mut col_offset = ColOffset::zero();
@@ -312,9 +312,8 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     }
 
     let mut col = 1u16;
-    for (i, tab) in manager.tabs.iter().enumerate() {
-        let is_active = i == manager.active_tab;
-        let indicator = if is_active { "●".to_string() } else { (i + 1).to_string() };
+    for (tab_num, (is_active, tab)) in manager.tabs.iter().enumerate() {
+        let indicator = if is_active { "●".to_string() } else { (tab_num + 1).to_string() };
         let label = format!(" [{}:{}] ", indicator, tab.display_name());
         let attrs = Attrs {
             fg: if is_active { active_fg } else { inactive_fg },

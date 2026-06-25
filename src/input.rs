@@ -4,7 +4,7 @@ use std::time::Duration;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
-use crate::pane_manager::PaneManager;
+use crate::pane_manager::{PaneManager, TabIndex};
 use crate::renderer::Renderer;
 use crate::scroll::ScrollOffset;
 use crate::size::TerminalSize;
@@ -123,7 +123,7 @@ fn handle_key(
             KeyCode::Char('n') => manager.switch_to_next(),
             KeyCode::Char('p') => manager.switch_to_prev(),
             KeyCode::Char(d @ '1'..='9') => {
-                manager.switch_to((d as usize) - ('1' as usize));
+                manager.switch_to(TabIndex::from((d as usize) - ('1' as usize)));
             }
             _ => {}
         },
