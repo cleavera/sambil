@@ -6,6 +6,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
 use crate::pane_manager::PaneManager;
 use crate::renderer::Renderer;
+use crate::scroll::ScrollOffset;
 use crate::size::TerminalSize;
 
 enum InputMode {
@@ -13,7 +14,7 @@ enum InputMode {
     AwaitingCommand,
     Naming(String),
     Renaming(String),
-    ScrollBack(usize),
+    ScrollBack(ScrollOffset),
     Help,
     Quit,
 }
@@ -38,7 +39,7 @@ pub fn event_loop<W: Write>(
         };
         let scroll_offset = match &mode {
             InputMode::ScrollBack(n) => *n,
-            _ => 0,
+            _ => ScrollOffset::zero(),
         };
         let show_help = matches!(mode, InputMode::Help);
         renderer.draw(out, manager, prompt.as_deref(), scroll_offset, show_help, leader_str)?;
@@ -117,7 +118,7 @@ fn handle_key(
             KeyCode::Right => {
                 manager.focus_next_pane();
             }
-            KeyCode::Char('[') => return Ok(InputMode::ScrollBack(0)),
+            KeyCode::Char('[') => return Ok(InputMode::ScrollBack(ScrollOffset::zero())),
             KeyCode::Char('?') => return Ok(InputMode::Help),
             KeyCode::Char('n') => manager.switch_to_next(),
             KeyCode::Char('p') => manager.switch_to_prev(),
@@ -172,15 +173,12 @@ fn handle_key(
         InputMode::Help => return Ok(InputMode::Normal),
 
         InputMode::ScrollBack(offset) => {
-            let page = manager.size.rows().saturating_sub(1) as usize;
-            const MAX_SCROLLBACK: usize = 1000;
+            let rows = manager.size.into();
             match code {
-                KeyCode::Up => return Ok(InputMode::ScrollBack(offset.saturating_add(1).min(MAX_SCROLLBACK))),
-                KeyCode::Down => return Ok(InputMode::ScrollBack(offset.saturating_sub(1))),
-                KeyCode::PageUp => return Ok(InputMode::ScrollBack(offset.saturating_add(page).min(MAX_SCROLLBACK))),
-                KeyCode::PageDown => {
-                    return Ok(InputMode::ScrollBack(offset.saturating_sub(page)));
-                }
+                KeyCode::Up => return Ok(InputMode::ScrollBack(offset.scroll_up())),
+                KeyCode::Down => return Ok(InputMode::ScrollBack(offset.scroll_down())),
+                KeyCode::PageUp => return Ok(InputMode::ScrollBack(offset.page_up(rows))),
+                KeyCode::PageDown => return Ok(InputMode::ScrollBack(offset.page_down(rows))),
                 KeyCode::Char('q') | KeyCode::Esc => return Ok(InputMode::Normal),
                 _ => return Ok(InputMode::ScrollBack(offset)),
             }

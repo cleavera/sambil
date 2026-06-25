@@ -10,6 +10,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
+use crate::scroll::ScrollOffset;
 use crate::size::TerminalSize;
 
 #[derive(Clone, PartialEq, Default)]
@@ -85,7 +86,7 @@ impl Renderer {
         out: &mut W,
         manager: &PaneManager,
         prompt: Option<&str>,
-        scroll_offset: usize,
+        scroll_offset: ScrollOffset,
         show_help: bool,
         leader: &str,
     ) -> Result<()> {
@@ -222,13 +223,13 @@ fn decscusr_to_crossterm(ps: u16) -> SetCursorStyle {
     }
 }
 
-fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: usize) {
+fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: ScrollOffset) {
     let tab = &manager.tabs[manager.active_tab];
     let n = tab.panes.len();
     let mid_row = (buf.size.rows() + 1) / 2; // vertical midpoint of content area
     let mut col_offset = 0u16;
     for (i, pane) in tab.panes.iter().enumerate() {
-        let offset = if i == tab.active_pane { scroll_offset } else { 0 };
+        let offset = if i == tab.active_pane { scroll_offset } else { ScrollOffset::zero() };
         paint_pane(buf, pane, col_offset, offset);
         col_offset += pane.width;
         if i + 1 < n {
@@ -256,9 +257,9 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
     }
 }
 
-fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: u16, scroll_offset: usize) {
+fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: u16, scroll_offset: ScrollOffset) {
     let mut parser = pane.parser.lock().unwrap();
-    parser.screen_mut().set_scrollback(scroll_offset);
+    parser.screen_mut().set_scrollback(scroll_offset.into());
     {
         let screen = parser.screen();
         for row in 0..pane.height {

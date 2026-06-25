@@ -3,6 +3,7 @@ mod input;
 mod pane;
 mod pane_manager;
 mod renderer;
+mod scroll;
 mod size;
 
 use std::io;

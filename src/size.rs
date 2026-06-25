@@ -20,3 +20,19 @@ impl TerminalSize {
     pub fn cols(&self) -> u16 { self.cols }
     pub fn rows(&self) -> u16 { self.rows }
 }
+
+impl From<TerminalSize> for Rows {
+    fn from(size: TerminalSize) -> Rows { Rows(size.rows) }
+}
+
+/// A row count guaranteed to be at least 1.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rows(u16);
+
+impl Rows {
+    pub fn new_clamped(rows: u16) -> Self { Rows(rows.max(1)) }
+}
+
+impl From<Rows> for usize {
+    fn from(r: Rows) -> usize { r.0 as usize }
+}
