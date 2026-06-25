@@ -1,4 +1,5 @@
 mod cell;
+mod cursor;
 mod config;
 mod input;
 mod pane;
@@ -10,7 +11,7 @@ mod size;
 use std::io;
 use std::panic;
 
-use crossterm::{cursor, event, execute, terminal};
+use crossterm::{cursor::Hide, cursor::Show, event, execute, terminal};
 
 use size::TerminalSize;
 
@@ -40,7 +41,7 @@ fn run() -> anyhow::Result<()> {
     execute!(
         stdout,
         terminal::EnterAlternateScreen,
-        cursor::Hide,
+        Hide,
         event::EnableBracketedPaste
     )?;
 
@@ -63,6 +64,6 @@ fn restore_terminal() {
         io::stdout(),
         event::DisableBracketedPaste,
         terminal::LeaveAlternateScreen,
-        cursor::Show
+        Show
     );
 }

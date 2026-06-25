@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
+use crate::cursor::CursorStyle;
 use crate::size::PaneSize;
 
 /// vt100 callbacks implementation that captures OSC 2 window title sequences
@@ -12,7 +13,7 @@ use crate::size::PaneSize;
 #[derive(Default)]
 pub struct TitleCallbacks {
     pub title: Option<String>,
-    pub cursor_style: u16, // DECSCUSR Ps: 0=default,1=blinking block,2=steady block,3=blinking underline,4=steady underline,5=blinking bar,6=steady bar
+    pub cursor_style: CursorStyle,
 }
 
 impl vt100::Callbacks for TitleCallbacks {
@@ -30,8 +31,8 @@ impl vt100::Callbacks for TitleCallbacks {
     ) {
         // DECSCUSR: CSI Ps SP q — set cursor shape
         if c == 'q' && i1 == Some(b' ') {
-            self.cursor_style =
-                params.first().and_then(|p| p.first()).copied().unwrap_or(0);
+            let ps = params.first().and_then(|p| p.first()).copied().unwrap_or(0);
+            self.cursor_style = CursorStyle::from_decscusr(ps);
         }
     }
 }

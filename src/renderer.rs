@@ -2,13 +2,14 @@ use std::io::Write;
 
 use anyhow::Result;
 use crossterm::{
-    cursor, queue,
+    cursor::{Hide, MoveTo, SetCursorStyle, Show},
+    queue,
     style::{Attribute, Color, Print, SetAttribute, SetBackgroundColor, SetForegroundColor},
-    cursor::SetCursorStyle,
 };
 use unicode_width::UnicodeWidthStr;
 
 use crate::cell::CellContent;
+use crate::cursor::CursorStyle;
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
 use crate::scroll::ScrollOffset;
@@ -111,14 +112,14 @@ impl Renderer {
             None => paint_tab_bar(&mut next, manager),
         }
 
-        queue!(out, cursor::Hide)?;
+        queue!(out, Hide)?;
         self.flush_diff(out, &next)?;
         self.prev = next;
 
         // Reposition the real terminal cursor after each frame.
         if show_help || prompt.is_some() {
             // Help overlay and text prompts use their own visual cursor — hide the real one.
-            queue!(out, cursor::Hide)?;
+            queue!(out, Hide)?;
         } else {
             let col_offset = manager.active_pane_col_offset();
             let tab = &manager.tabs[manager.active_tab];
@@ -132,11 +133,11 @@ impl Renderer {
                 (r, c, hide, ps)
             };
             if hide {
-                queue!(out, cursor::Hide)?;
+                queue!(out, Hide)?;
             } else {
-                queue!(out, cursor::MoveTo(cur_col + col_offset, cur_row + 1))?;
-                queue!(out, decscusr_to_crossterm(ps))?;
-                queue!(out, cursor::Show)?;
+                queue!(out, MoveTo(cur_col + col_offset, cur_row + 1))?;
+                queue!(out, cursor_style_to_crossterm(ps))?;
+                queue!(out, Show)?;
             }
         }
 
@@ -162,7 +163,7 @@ impl Renderer {
                 }
 
                 if cursor != Some((row, col)) {
-                    queue!(out, cursor::MoveTo(col, row))?;
+                    queue!(out, MoveTo(col, row))?;
                 }
 
                 if new_cell.attrs != current_attrs {
@@ -212,15 +213,15 @@ fn vt100_color_to_crossterm(color: vt100::Color) -> Color {
     }
 }
 
-fn decscusr_to_crossterm(ps: u16) -> SetCursorStyle {
-    match ps {
-        1 => SetCursorStyle::BlinkingBlock,
-        2 => SetCursorStyle::SteadyBlock,
-        3 => SetCursorStyle::BlinkingUnderScore,
-        4 => SetCursorStyle::SteadyUnderScore,
-        5 => SetCursorStyle::BlinkingBar,
-        6 => SetCursorStyle::SteadyBar,
-        _ => SetCursorStyle::DefaultUserShape,
+fn cursor_style_to_crossterm(style: CursorStyle) -> SetCursorStyle {
+    match style {
+        CursorStyle::Default => SetCursorStyle::DefaultUserShape,
+        CursorStyle::BlinkingBlock => SetCursorStyle::BlinkingBlock,
+        CursorStyle::SteadyBlock => SetCursorStyle::SteadyBlock,
+        CursorStyle::BlinkingUnderline => SetCursorStyle::BlinkingUnderScore,
+        CursorStyle::SteadyUnderline => SetCursorStyle::SteadyUnderScore,
+        CursorStyle::BlinkingBar => SetCursorStyle::BlinkingBar,
+        CursorStyle::SteadyBar => SetCursorStyle::SteadyBar,
     }
 }
 
