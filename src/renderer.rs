@@ -8,6 +8,7 @@ use crossterm::{
 };
 use unicode_width::UnicodeWidthStr;
 
+use crate::cell::CellContent;
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
 use crate::scroll::ScrollOffset;
@@ -25,13 +26,13 @@ struct Attrs {
 
 #[derive(Clone, PartialEq)]
 struct Cell {
-    content: String,
+    content: CellContent,
     attrs: Attrs,
 }
 
 impl Default for Cell {
     fn default() -> Self {
-        Cell { content: " ".to_string(), attrs: Attrs::default() }
+        Cell { content: CellContent::default(), attrs: Attrs::default() }
     }
 }
 
@@ -51,9 +52,9 @@ impl FrameBuffer {
         }
     }
 
-    fn set_text(&mut self, row: u16, col: u16, content: impl Into<String>) {
+    fn set_text(&mut self, row: u16, col: u16, content: CellContent) {
         if row < self.size.rows() && col < self.size.cols() {
-            self.cells[row as usize * self.size.cols() as usize + col as usize].content = content.into();
+            self.cells[row as usize * self.size.cols() as usize + col as usize].content = content;
         }
     }
 
@@ -169,7 +170,7 @@ impl Renderer {
                     current_attrs = new_cell.attrs.clone();
                 }
 
-                queue!(out, Print(&new_cell.content))?;
+                queue!(out, Print(new_cell.content.as_str()))?;
                 let char_width = UnicodeWidthStr::width(new_cell.content.as_str()).max(1) as u16;
                 cursor = Some((row, col + char_width));
             }
@@ -243,12 +244,12 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
             };
             for row in 1..buf.size.rows() {
                 let (content, fg) = if row == mid_row && indicator != "│" {
-                    (indicator, vt100::Color::Idx(15))
+                    (CellContent::try_from(indicator).expect("single grapheme cluster"), vt100::Color::Idx(15))
                 } else {
-                    ("│", vt100::Color::Idx(8))
+                    (CellContent::from('│'), vt100::Color::Idx(8))
                 };
                 buf.set(row, col_offset, Cell {
-                    content: content.to_string(),
+                    content,
                     attrs: Attrs { fg, ..Attrs::default() },
                 });
             }
@@ -268,8 +269,11 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: u16, scroll_offset
                     Some(c) if c.is_wide_continuation() => Cell::default(),
                     Some(c) => {
                         let s = c.contents();
-                        let content =
-                            if s.is_empty() { " ".to_string() } else { s.to_string() };
+                        let content = if s.is_empty() {
+                            CellContent::default()
+                        } else {
+                            CellContent::try_from(s).expect("vt100 cell contains single grapheme cluster")
+                        };
                         let attrs = Attrs {
                             fg: c.fgcolor(),
                             bg: c.bgcolor(),
@@ -299,7 +303,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     // Fill entire row with bar background first.
     for col in 0..manager.size.cols() {
         buf.set(row, col, Cell {
-            content: " ".to_string(),
+            content: CellContent::default(),
             attrs: Attrs { bg: bar_bg, ..Attrs::default() },
         });
     }
@@ -317,12 +321,11 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
         };
         for ch in label.chars() {
             if col >= manager.size.cols() { break; }
-            buf.set(row, col, Cell { content: ch.to_string(), attrs: attrs.clone() });
+            buf.set(row, col, Cell { content: CellContent::from(ch), attrs: attrs.clone() });
             col += 1;
         }
     }
 
-    // Undo hint — right-aligned when a closed tab is pending.
     if manager.has_pending_close() {
         let hint = " ↩ u ";
         let hint_col = manager.size.cols().saturating_sub(hint.chars().count() as u16);
@@ -330,7 +333,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
         for (offset, ch) in hint.chars().enumerate() {
             let c = hint_col + offset as u16;
             if c < manager.size.cols() {
-                buf.set(row, c, Cell { content: ch.to_string(), attrs: hint_attrs.clone() });
+                buf.set(row, c, Cell { content: CellContent::from(ch), attrs: hint_attrs.clone() });
             }
         }
     }
@@ -339,7 +342,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
 fn paint_prompt(buf: &mut FrameBuffer, _manager: &PaneManager, text: &str) {
     let row = 0;
     for (col, ch) in text.chars().enumerate() {
-        buf.set_text(row, col as u16, ch.to_string());
+        buf.set_text(row, col as u16, CellContent::from(ch));
     }
 }
 
@@ -381,7 +384,7 @@ fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
             break;
         }
         for (col, ch) in line.chars().enumerate() {
-            buf.set_text(row, col as u16, ch.to_string());
+            buf.set_text(row, col as u16, CellContent::from(ch));
         }
     }
 }

@@ -1,3 +1,4 @@
+mod cell;
 mod config;
 mod input;
 mod pane;

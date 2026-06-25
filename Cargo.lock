@@ -472,6 +472,7 @@ dependencies = [
  "portable-pty",
  "serde",
  "toml",
+ "unicode-segmentation",
  "unicode-width",
  "vt100",
 ]
