@@ -90,3 +90,20 @@ impl PaneSize {
     pub fn cols(&self) -> u16 { self.cols }
     pub fn rows(&self) -> u16 { self.rows }
 }
+
+/// The horizontal pixel offset of a pane from the left edge of the terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ColOffset(u16);
+
+impl ColOffset {
+    pub fn zero() -> Self { ColOffset(0) }
+
+    /// Advance by a pane width plus a 1-column divider.
+    pub fn advance_past_pane(self, pane_width: u16) -> Self {
+        ColOffset(self.0.saturating_add(pane_width).saturating_add(1))
+    }
+}
+
+impl From<ColOffset> for u16 {
+    fn from(o: ColOffset) -> u16 { o.0 }
+}

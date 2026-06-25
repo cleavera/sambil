@@ -13,7 +13,7 @@ use crate::cursor::CursorStyle;
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
 use crate::scroll::ScrollOffset;
-use crate::size::TerminalSize;
+use crate::size::{ColOffset, TerminalSize};
 
 #[derive(Clone, PartialEq, Default)]
 struct Attrs {
@@ -135,7 +135,7 @@ impl Renderer {
             if hide {
                 queue!(out, Hide)?;
             } else {
-                queue!(out, MoveTo(cur_col + col_offset, cur_row + 1))?;
+                queue!(out, MoveTo(cur_col + u16::from(col_offset), cur_row + 1))?;
                 queue!(out, cursor_style_to_crossterm(ps))?;
                 queue!(out, Show)?;
             }
@@ -229,12 +229,12 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
     let tab = &manager.tabs[manager.active_tab];
     let n = tab.panes.len();
     let mid_row = (buf.size.rows() + 1) / 2; // vertical midpoint of content area
-    let mut col_offset = 0u16;
+    let mut col_offset = ColOffset::zero();
     for (i, pane) in tab.panes.iter().enumerate() {
         let offset = if i == tab.active_pane { scroll_offset } else { ScrollOffset::zero() };
         paint_pane(buf, pane, col_offset, offset);
-        col_offset += pane.width;
         if i + 1 < n {
+            let divider_col = u16::from(col_offset) + pane.width;
             // The indicator points toward the active pane.
             let indicator = if i == tab.active_pane {
                 "◀"
@@ -249,17 +249,19 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
                 } else {
                     (CellContent::from('│'), vt100::Color::Idx(8))
                 };
-                buf.set(row, col_offset, Cell {
+                buf.set(row, divider_col, Cell {
                     content,
                     attrs: Attrs { fg, ..Attrs::default() },
                 });
             }
-            col_offset += 1;
+            col_offset = col_offset.advance_past_pane(pane.width);
+        } else {
+            col_offset = ColOffset::zero(); // not used after last pane, but keep tidy
         }
     }
 }
 
-fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: u16, scroll_offset: ScrollOffset) {
+fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: ColOffset, scroll_offset: ScrollOffset) {
     let mut parser = pane.parser.lock().unwrap();
     parser.screen_mut().set_scrollback(scroll_offset.into());
     {
@@ -287,7 +289,7 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: u16, scroll_offset
                     }
                     None => Cell::default(),
                 };
-                buf.set(row + 1, col + col_offset, cell);
+                buf.set(row + 1, col + u16::from(col_offset), cell);
             }
         }
     }

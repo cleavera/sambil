@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 
 use crate::pane::{path_basename, Pane};
-use crate::size::{ContentArea, TerminalSize};
+use crate::size::{ColOffset, ContentArea, TerminalSize};
 
 #[cfg(target_os = "macos")]
 mod macos_cwd {
@@ -249,11 +249,11 @@ impl PaneManager {
         Ok(())
     }
 
-    pub fn active_pane_col_offset(&self) -> u16 {
+    pub fn active_pane_col_offset(&self) -> ColOffset {
         let tab = &self.tabs[self.active_tab];
-        let mut offset = 0u16;
+        let mut offset = ColOffset::zero();
         for i in 0..tab.active_pane {
-            offset += tab.panes[i].width + 1; // +1 for divider
+            offset = offset.advance_past_pane(tab.panes[i].width);
         }
         offset
     }
