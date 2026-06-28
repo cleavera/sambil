@@ -8,12 +8,12 @@ use crossterm::{
 };
 use unicode_width::UnicodeWidthStr;
 
-use crate::cell::CellContent;
 use crate::cursor::CursorStyle;
 use crate::pane::Pane;
 use crate::pane_manager::PaneManager;
 use crate::scroll::ScrollOffset;
 use crate::size::{ColOffset, TerminalSize};
+use crate::{cell::CellContent, pane_manager::TabActiveState};
 
 #[derive(Clone, PartialEq, Default)]
 struct Attrs {
@@ -33,7 +33,10 @@ struct Cell {
 
 impl Default for Cell {
     fn default() -> Self {
-        Cell { content: CellContent::default(), attrs: Attrs::default() }
+        Cell {
+            content: CellContent::default(),
+            attrs: Attrs::default(),
+        }
     }
 }
 
@@ -44,7 +47,10 @@ struct FrameBuffer {
 
 impl FrameBuffer {
     fn new(size: TerminalSize) -> Self {
-        FrameBuffer { size, cells: vec![Cell::default(); size.rows() as usize * size.cols() as usize] }
+        FrameBuffer {
+            size,
+            cells: vec![Cell::default(); size.rows() as usize * size.cols() as usize],
+        }
     }
 
     fn set(&mut self, row: u16, col: u16, cell: Cell) {
@@ -75,7 +81,10 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(size: TerminalSize) -> Self {
-        Renderer { prev: FrameBuffer::new(size), prev_show_help: false }
+        Renderer {
+            prev: FrameBuffer::new(size),
+            prev_show_help: false,
+        }
     }
 
     pub fn invalidate(&mut self, size: TerminalSize) {
@@ -93,7 +102,10 @@ impl Renderer {
         leader: &str,
     ) -> Result<()> {
         if show_help != self.prev_show_help {
-            queue!(out, crossterm::terminal::Clear(crossterm::terminal::ClearType::All))?;
+            queue!(
+                out,
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+            )?;
             self.prev = FrameBuffer::new(manager.size);
             self.prev_show_help = show_help;
         }
@@ -226,7 +238,11 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
     let mid_row = (buf.size.rows() + 1) / 2;
     let mut col_offset = ColOffset::zero();
     for (i, pane) in tab.panes.iter().enumerate() {
-        let offset = if i == tab.active_pane { scroll_offset } else { ScrollOffset::zero() };
+        let offset = if i == tab.active_pane {
+            scroll_offset
+        } else {
+            ScrollOffset::zero()
+        };
         paint_pane(buf, pane, col_offset, offset);
         if i + 1 < n {
             let divider_col = u16::from(col_offset) + pane.width;
@@ -239,14 +255,24 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
             };
             for row in 1..buf.size.rows() {
                 let (content, fg) = if row == mid_row && indicator != "│" {
-                    (CellContent::try_from(indicator).expect("single grapheme cluster"), vt100::Color::Idx(15))
+                    (
+                        CellContent::try_from(indicator).expect("single grapheme cluster"),
+                        vt100::Color::Idx(15),
+                    )
                 } else {
                     (CellContent::from('│'), vt100::Color::Idx(8))
                 };
-                buf.set(row, divider_col, Cell {
-                    content,
-                    attrs: Attrs { fg, ..Attrs::default() },
-                });
+                buf.set(
+                    row,
+                    divider_col,
+                    Cell {
+                        content,
+                        attrs: Attrs {
+                            fg,
+                            ..Attrs::default()
+                        },
+                    },
+                );
             }
             col_offset = col_offset.advance_past_pane(pane.width);
         } else {
@@ -255,7 +281,12 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
     }
 }
 
-fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: ColOffset, scroll_offset: ScrollOffset) {
+fn paint_pane(
+    buf: &mut FrameBuffer,
+    pane: &Pane,
+    col_offset: ColOffset,
+    scroll_offset: ScrollOffset,
+) {
     let mut parser = pane.parser.lock().unwrap();
     parser.screen_mut().set_scrollback(scroll_offset.into());
     {
@@ -269,7 +300,8 @@ fn paint_pane(buf: &mut FrameBuffer, pane: &Pane, col_offset: ColOffset, scroll_
                         let content = if s.is_empty() {
                             CellContent::default()
                         } else {
-                            CellContent::try_from(s).expect("vt100 cell contains single grapheme cluster")
+                            CellContent::try_from(s)
+                                .expect("vt100 cell contains single grapheme cluster")
                         };
                         let attrs = Attrs {
                             fg: c.fgcolor(),
@@ -298,37 +330,71 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let inactive_fg = vt100::Color::Idx(8);
 
     for col in 0..manager.size.cols() {
-        buf.set(row, col, Cell {
-            content: CellContent::default(),
-            attrs: Attrs { bg: bar_bg, ..Attrs::default() },
-        });
+        buf.set(
+            row,
+            col,
+            Cell {
+                content: CellContent::default(),
+                attrs: Attrs {
+                    bg: bar_bg,
+                    ..Attrs::default()
+                },
+            },
+        );
     }
 
     let mut col = 1u16;
-    for (tab_num, (is_active, tab)) in manager.tabs.iter().enumerate() {
-        let indicator = if is_active { "●".to_string() } else { (tab_num + 1).to_string() };
+    for (tab_num, (tab_active_state, tab)) in manager.tabs.iter().enumerate() {
+        let (indicator, fg, bg, bold) = match tab_active_state {
+            TabActiveState::Active => ("●".to_string(), active_fg, active_bg, true),
+            TabActiveState::Inactive => ((tab_num + 1).to_string(), inactive_fg, bar_bg, false),
+        };
+
         let label = format!(" [{}:{}] ", indicator, tab.display_name());
         let attrs = Attrs {
-            fg: if is_active { active_fg } else { inactive_fg },
-            bg: if is_active { active_bg } else { bar_bg },
-            bold: is_active,
+            fg,
+            bg,
+            bold,
             ..Attrs::default()
         };
+
         for ch in label.chars() {
-            if col >= manager.size.cols() { break; }
-            buf.set(row, col, Cell { content: CellContent::from(ch), attrs: attrs.clone() });
+            if col >= manager.size.cols() {
+                break;
+            }
+            buf.set(
+                row,
+                col,
+                Cell {
+                    content: CellContent::from(ch),
+                    attrs: attrs.clone(),
+                },
+            );
             col += 1;
         }
     }
 
     if manager.has_pending_close() {
         let hint = " ↩ u ";
-        let hint_col = manager.size.cols().saturating_sub(hint.chars().count() as u16);
-        let hint_attrs = Attrs { fg: vt100::Color::Idx(11), ..Attrs::default() };
+        let hint_col = manager
+            .size
+            .cols()
+            .saturating_sub(hint.chars().count() as u16);
+        let hint_attrs = Attrs {
+            fg: vt100::Color::Idx(11),
+            ..Attrs::default()
+        };
         for (offset, ch) in hint.chars().enumerate() {
             let c = hint_col + offset as u16;
             if c < manager.size.cols() {
-                buf.set(row, c, Cell { content: CellContent::from(ch), attrs: hint_attrs.clone() });
+                buf.set(
+                    row,
+                    c,
+                    Cell {
+                        content: CellContent::from(ch),
+                        attrs: hint_attrs.clone(),
+                    },
+                );
             }
         }
     }
@@ -342,32 +408,32 @@ fn paint_prompt(buf: &mut FrameBuffer, _manager: &PaneManager, text: &str) {
 }
 
 fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
-    let display = leader
-        .to_lowercase()
-        .replacen("ctrl+", "Ctrl-", 1);
+    let display = leader.to_lowercase().replacen("ctrl+", "Ctrl-", 1);
 
     let bindings = [
-        ("c",    "New tab (cwd name)"),
-        ("C",    "New tab (enter name)"),
-        ("|",    "Split horizontal"),
-        ("x",    "Close pane (tab if last)"),
-        ("u",    "Undo close tab"),
-        ("r",    "Rename tab"),
-        ("n",    "Next tab"),
-        ("p",    "Previous tab"),
-        ("←/→",  "Previous/next pane"),
-        ("1-9",  "Switch to tab N"),
-        ("[",    "Scroll mode"),
-        ("q",    "Quit"),
-        ("?",    "Show this help"),
+        ("c", "New tab (cwd name)"),
+        ("C", "New tab (enter name)"),
+        ("|", "Split horizontal"),
+        ("x", "Close pane (tab if last)"),
+        ("u", "Undo close tab"),
+        ("r", "Rename tab"),
+        ("n", "Next tab"),
+        ("p", "Previous tab"),
+        ("←/→", "Previous/next pane"),
+        ("1-9", "Switch to tab N"),
+        ("[", "Scroll mode"),
+        ("q", "Quit"),
+        ("?", "Show this help"),
     ];
 
     let lines: Vec<String> = std::iter::once(String::new())
         .chain(std::iter::once("  Sambil Key Bindings".to_string()))
         .chain(std::iter::once(format!("  {}", "─".repeat(39))))
-        .chain(bindings.iter().map(|(key, desc)| {
-            format!("  {} {}  {}", display, key, desc)
-        }))
+        .chain(
+            bindings
+                .iter()
+                .map(|(key, desc)| format!("  {} {}  {}", display, key, desc)),
+        )
         .chain(std::iter::once(format!("  {}", "─".repeat(39))))
         .chain(std::iter::once("  Press any key to dismiss".to_string()))
         .collect();

@@ -1,0 +1,8 @@
+[package]
+name = "as_source"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Link the macro crate to the library crate
+as_source_macros = { path = "../as_source_macros" }

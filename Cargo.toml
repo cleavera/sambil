@@ -1,27 +1,11 @@
-[package]
-name = "sambil"
+[workspace]
+members = [
+    "app",
+    "as_source",
+    "as_source_macros",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2021"
 version = "0.1.0"
-edition = "2024"
-description = "A cross-platform, keyboard-driven terminal multiplexer with tabs and horizontal splits"
-license = "MIT"
-repository = "https://github.com/cleavera/sambil"
-homepage = "https://github.com/cleavera/sambil"
-readme = "README.md"
-keywords = ["terminal", "multiplexer", "pty", "tabs", "tui"]
-categories = ["command-line-utilities"]
-exclude = ["roadmap.md"]
-
-[dependencies]
-anyhow = "1"
-crossterm = "0.29"
-portable-pty = "0.9"
-vt100 = "0.16"
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-unicode-width = "0.2"
-unicode-segmentation = "1"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-libproc = "0.14"
-
-

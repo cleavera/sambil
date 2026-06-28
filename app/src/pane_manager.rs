@@ -4,8 +4,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
-use crate::pane::{path_basename, Pane};
+use crate::pane::{Pane, path_basename};
 use crate::size::{ColOffset, ContentArea, TerminalSize};
+
+use as_source::AsSource;
 
 #[cfg(target_os = "macos")]
 mod macos_cwd {
@@ -16,8 +18,6 @@ mod macos_cwd {
 
     const MAXPATHLEN: usize = 1024;
 
-    // Mirror of the vinfo_stat C struct (136 bytes on macOS).
-    // The layout matches the Darwin kernel headers exactly.
     #[repr(C)]
     struct VinfoStat([u8; 136]);
 
@@ -42,7 +42,9 @@ mod macos_cwd {
     }
 
     impl PIDInfo for ProcVnodePathInfo {
-        fn flavor() -> PidInfoFlavor { PidInfoFlavor::VNodePathInfo }
+        fn flavor() -> PidInfoFlavor {
+            PidInfoFlavor::VNodePathInfo
+        }
     }
 
     pub fn pid_cwd(pid: u32) -> Option<PathBuf> {
@@ -58,11 +60,30 @@ const UNDO_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct TabIndex(usize);
 
 impl From<usize> for TabIndex {
-    fn from(n: usize) -> Self { TabIndex(n) }
+    fn from(n: usize) -> Self {
+        TabIndex(n)
+    }
 }
 
 impl From<TabIndex> for usize {
-    fn from(t: TabIndex) -> usize { t.0 }
+    fn from(t: TabIndex) -> usize {
+        t.0
+    }
+}
+
+pub enum TabActiveState {
+    Active,
+    Inactive
+}
+
+impl From<bool> for TabActiveState {
+    fn from(value: bool) -> Self {
+        if value {
+            return TabActiveState::Active;
+        }
+        
+        TabActiveState::Inactive
+    }
 }
 
 pub struct TabSet {
@@ -72,7 +93,10 @@ pub struct TabSet {
 
 impl TabSet {
     pub fn new(first: Tab) -> Self {
-        TabSet { tabs: vec![first], active: 0 }
+        TabSet {
+            tabs: vec![first],
+            active: 0,
+        }
     }
 
     pub fn active(&self) -> &Tab {
@@ -91,9 +115,12 @@ impl TabSet {
         self.tabs.len()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (bool, &Tab)> {
+    pub fn iter(&self) -> impl Iterator<Item = (TabActiveState, &Tab)> {
         let active = self.active;
-        self.tabs.iter().enumerate().map(move |(i, tab)| (i == active, tab))
+        self.tabs
+            .iter()
+            .enumerate()
+            .map(move |(i, tab)| (TabActiveState::from(i == active), tab))
     }
 
     pub fn push_and_activate(&mut self, tab: Tab) {
@@ -101,9 +128,12 @@ impl TabSet {
         self.active = self.tabs.len() - 1;
     }
 
-    pub fn switch_to(&mut self, index: TabIndex) -> bool {
+    pub fn switch_to(&mut self, index: TabIndex) {
         let i = usize::from(index);
-        if i < self.tabs.len() { self.active = i; true } else { false }
+
+        if i < self.tabs.len() {
+            self.active = i;
+        }
     }
 
     pub fn switch_next(&mut self) {
@@ -111,11 +141,16 @@ impl TabSet {
     }
 
     pub fn switch_prev(&mut self) {
-        self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len().saturating_sub(1));
+        self.active = self
+            .active
+            .checked_sub(1)
+            .unwrap_or(self.tabs.len().saturating_sub(1));
     }
 
     pub fn remove_active(&mut self) -> Option<Tab> {
-        if self.tabs.len() == 1 { return None; }
+        if self.tabs.len() == 1 {
+            return None;
+        }
         let tab = self.tabs.remove(self.active);
         if self.active >= self.tabs.len() {
             self.active = self.tabs.len() - 1;
@@ -148,10 +183,13 @@ pub struct Tab {
     pub name: Option<String>,
 }
 
-
 impl Tab {
     pub fn new(pane: Pane) -> Self {
-        Tab { panes: vec![pane], active_pane: 0, name: None }
+        Tab {
+            panes: vec![pane],
+            active_pane: 0,
+            name: None,
+        }
     }
 
     pub fn display_name(&self) -> String {
@@ -160,6 +198,11 @@ impl Tab {
         }
         self.panes[self.active_pane].auto_name()
     }
+}
+
+#[derive(Debug, AsSource)]
+pub enum UndoCloseError {
+    NoPendingClosures,
 }
 
 pub struct PaneManager {
@@ -204,13 +247,17 @@ impl PaneManager {
                 let _ = self.resize_tab_panes(ti);
             }
 
-            let last_exited = self.tabs.get(ti)
+            let last_exited = self
+                .tabs
+                .get(ti)
                 .and_then(|t| t.panes.last())
                 .map(|p| p.exited.load(Ordering::Relaxed))
                 .unwrap_or(false);
 
             if last_exited {
-                if self.tabs.len() == 1 { return true; }
+                if self.tabs.len() == 1 {
+                    return true;
+                }
                 self.tabs.remove_at(ti);
             } else {
                 ti += 1;
@@ -244,16 +291,18 @@ impl PaneManager {
         }
     }
 
-    pub fn undo_close(&mut self) -> bool {
+    pub fn undo_close(&mut self) -> Result<(), UndoCloseError> {
         if let Some((tab, _)) = self.pending_close.pop() {
             self.tabs.push_and_activate(tab);
-            return true;
+            return Ok(());
         }
-        false
+        
+        Err(UndoCloseError::NoPendingClosures)
     }
 
     pub fn reap_pending_close(&mut self) {
-        self.pending_close.retain(|(_, closed_at)| closed_at.elapsed() < UNDO_TIMEOUT);
+        self.pending_close
+            .retain(|(_, closed_at)| closed_at.elapsed() < UNDO_TIMEOUT);
     }
 
     pub fn has_pending_close(&self) -> bool {
@@ -292,7 +341,10 @@ impl PaneManager {
     pub fn focus_prev_pane(&mut self) {
         let tab = self.tabs.active_mut();
         let n = tab.panes.len();
-        tab.active_pane = tab.active_pane.checked_sub(1).unwrap_or(n.saturating_sub(1));
+        tab.active_pane = tab
+            .active_pane
+            .checked_sub(1)
+            .unwrap_or(n.saturating_sub(1));
     }
 
     fn resize_tab_panes(&mut self, tab_idx: usize) -> Result<()> {
@@ -301,7 +353,9 @@ impl PaneManager {
             None => return Ok(()),
         };
         let n = tab.panes.len();
-        if n == 0 { return Ok(()); }
+        if n == 0 {
+            return Ok(());
+        }
         let sizes = ContentArea::from(self.size).split_horizontal(n);
         for (pane, size) in tab.panes.iter_mut().zip(sizes) {
             pane.resize(size)?;
@@ -360,7 +414,12 @@ impl PaneManager {
 
     pub fn active_bracketed_paste(&self) -> bool {
         let tab = self.tabs.active();
-        tab.panes[tab.active_pane].parser.lock().unwrap().screen().bracketed_paste()
+        tab.panes[tab.active_pane]
+            .parser
+            .lock()
+            .unwrap()
+            .screen()
+            .bracketed_paste()
     }
 
     pub fn switch_to(&mut self, index: TabIndex) {
