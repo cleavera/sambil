@@ -1,5 +1,3 @@
-/// The dimensions of a terminal or pane in character cells.
-/// Both `cols` and `rows` are guaranteed to be at least 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TerminalSize {
     cols: u16,
@@ -7,12 +5,10 @@ pub struct TerminalSize {
 }
 
 impl TerminalSize {
-    /// Returns `None` if either dimension is zero.
     pub fn new(cols: u16, rows: u16) -> Option<Self> {
         if cols == 0 || rows == 0 { None } else { Some(TerminalSize { cols, rows }) }
     }
 
-    /// Clamps a zero dimension to 1 rather than failing.
     pub fn new_clamped(cols: u16, rows: u16) -> Self {
         TerminalSize { cols: cols.max(1), rows: rows.max(1) }
     }
@@ -25,7 +21,6 @@ impl From<TerminalSize> for Rows {
     fn from(size: TerminalSize) -> Rows { Rows(size.rows) }
 }
 
-/// A row count guaranteed to be at least 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rows(u16);
 
@@ -37,8 +32,6 @@ impl From<Rows> for usize {
     fn from(r: Rows) -> usize { r.0 as usize }
 }
 
-/// The drawable area available for panes — the terminal minus the tab bar row.
-/// Guaranteed to be at least 1×1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContentArea {
     cols: u16,
@@ -46,16 +39,10 @@ pub struct ContentArea {
 }
 
 impl ContentArea {
-    pub fn cols(&self) -> u16 { self.cols }
-    pub fn rows(&self) -> u16 { self.rows }
-
-    /// The size of a single full-width pane occupying the entire content area.
     pub fn full_size(&self) -> PaneSize {
         PaneSize { cols: self.cols, rows: self.rows }
     }
 
-    /// Divides the content area evenly into `n` panes separated by 1-column dividers.
-    /// Returns one `PaneSize` per pane; the last pane absorbs any remainder columns.
     pub fn split_horizontal(&self, n: usize) -> Vec<PaneSize> {
         if n == 0 { return vec![]; }
         let n16 = n as u16;
@@ -78,8 +65,6 @@ impl From<TerminalSize> for ContentArea {
     }
 }
 
-/// The dimensions of a single pane within the content area.
-/// Guaranteed to be at least 1×1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PaneSize {
     cols: u16,
@@ -91,14 +76,12 @@ impl PaneSize {
     pub fn rows(&self) -> u16 { self.rows }
 }
 
-/// The horizontal pixel offset of a pane from the left edge of the terminal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ColOffset(u16);
 
 impl ColOffset {
     pub fn zero() -> Self { ColOffset(0) }
 
-    /// Advance by a pane width plus a 1-column divider.
     pub fn advance_past_pane(self, pane_width: u16) -> Self {
         ColOffset(self.0.saturating_add(pane_width).saturating_add(1))
     }

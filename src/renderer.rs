@@ -92,8 +92,6 @@ impl Renderer {
         show_help: bool,
         leader: &str,
     ) -> Result<()> {
-        // When toggling in or out of the help overlay, clear the physical
-        // terminal and invalidate the diff buffer so every cell is re-emitted.
         if show_help != self.prev_show_help {
             queue!(out, crossterm::terminal::Clear(crossterm::terminal::ClearType::All))?;
             self.prev = FrameBuffer::new(manager.size);
@@ -116,9 +114,7 @@ impl Renderer {
         self.flush_diff(out, &next)?;
         self.prev = next;
 
-        // Reposition the real terminal cursor after each frame.
         if show_help || prompt.is_some() {
-            // Help overlay and text prompts use their own visual cursor — hide the real one.
             queue!(out, Hide)?;
         } else {
             let col_offset = manager.active_pane_col_offset();
@@ -177,7 +173,6 @@ impl Renderer {
             }
         }
 
-        // Leave the terminal in a clean default state after each frame.
         if current_attrs != (Attrs::default()) {
             queue!(out, SetAttribute(Attribute::Reset))?;
         }
@@ -228,14 +223,13 @@ fn cursor_style_to_crossterm(style: CursorStyle) -> SetCursorStyle {
 fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: ScrollOffset) {
     let tab = manager.tabs.active();
     let n = tab.panes.len();
-    let mid_row = (buf.size.rows() + 1) / 2; // vertical midpoint of content area
+    let mid_row = (buf.size.rows() + 1) / 2;
     let mut col_offset = ColOffset::zero();
     for (i, pane) in tab.panes.iter().enumerate() {
         let offset = if i == tab.active_pane { scroll_offset } else { ScrollOffset::zero() };
         paint_pane(buf, pane, col_offset, offset);
         if i + 1 < n {
             let divider_col = u16::from(col_offset) + pane.width;
-            // The indicator points toward the active pane.
             let indicator = if i == tab.active_pane {
                 "◀"
             } else if i + 1 == tab.active_pane {
@@ -256,7 +250,7 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
             }
             col_offset = col_offset.advance_past_pane(pane.width);
         } else {
-            col_offset = ColOffset::zero(); // not used after last pane, but keep tidy
+            col_offset = ColOffset::zero();
         }
     }
 }
@@ -303,7 +297,6 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
     let active_bg = vt100::Color::Idx(8);
     let inactive_fg = vt100::Color::Idx(8);
 
-    // Fill entire row with bar background first.
     for col in 0..manager.size.cols() {
         buf.set(row, col, Cell {
             content: CellContent::default(),
@@ -349,7 +342,6 @@ fn paint_prompt(buf: &mut FrameBuffer, _manager: &PaneManager, text: &str) {
 }
 
 fn paint_help(buf: &mut FrameBuffer, manager: &PaneManager, leader: &str) {
-    // Format "ctrl+b" → "Ctrl-b", "ctrl+space" → "Ctrl-space"
     let display = leader
         .to_lowercase()
         .replacen("ctrl+", "Ctrl-", 1);

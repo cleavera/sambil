@@ -65,7 +65,6 @@ impl From<TabIndex> for usize {
     fn from(t: TabIndex) -> usize { t.0 }
 }
 
-/// Owns the tab list and active-tab invariant: `active` is always a valid index.
 pub struct TabSet {
     tabs: Vec<Tab>,
     active: usize,
@@ -92,13 +91,11 @@ impl TabSet {
         self.tabs.len()
     }
 
-    /// Iterates over all tabs as `(is_active, &Tab)`.
     pub fn iter(&self) -> impl Iterator<Item = (bool, &Tab)> {
         let active = self.active;
         self.tabs.iter().enumerate().map(move |(i, tab)| (i == active, tab))
     }
 
-    /// Appends a tab and makes it active.
     pub fn push_and_activate(&mut self, tab: Tab) {
         self.tabs.push(tab);
         self.active = self.tabs.len() - 1;
@@ -117,7 +114,6 @@ impl TabSet {
         self.active = self.active.checked_sub(1).unwrap_or(self.tabs.len().saturating_sub(1));
     }
 
-    /// Removes the active tab. Returns `None` if it is the last tab (nothing removed).
     pub fn remove_active(&mut self) -> Option<Tab> {
         if self.tabs.len() == 1 { return None; }
         let tab = self.tabs.remove(self.active);
@@ -127,7 +123,6 @@ impl TabSet {
         Some(tab)
     }
 
-    /// Removes the tab at a raw index, adjusting `active` to remain valid.
     pub fn remove_at(&mut self, idx: usize) -> Tab {
         let tab = self.tabs.remove(idx);
         if self.active >= self.tabs.len() {
@@ -159,9 +154,6 @@ impl Tab {
         Tab { panes: vec![pane], active_pane: 0, name: None }
     }
 
-    /// The name shown in the tab bar.
-    /// - Explicit name (`Some`) is shown as-is.
-    /// - Auto-named (`None`): delegates to the active pane's OSC 2 / cwd.
     pub fn display_name(&self) -> String {
         if let Some(ref name) = self.name {
             return name.clone();
@@ -187,11 +179,9 @@ impl PaneManager {
         })
     }
 
-    /// Closes any panes/tabs whose shell has exited. Returns `true` if no tabs remain.
     pub fn close_exited_tabs(&mut self) -> bool {
         let mut ti = 0;
         while ti < self.tabs.len() {
-            // Remove non-last exited panes from this tab.
             let mut changed = false;
             {
                 let tab = self.tabs.get_mut(ti).unwrap();
@@ -214,7 +204,6 @@ impl PaneManager {
                 let _ = self.resize_tab_panes(ti);
             }
 
-            // Check if the tab's last pane has exited.
             let last_exited = self.tabs.get(ti)
                 .and_then(|t| t.panes.last())
                 .map(|p| p.exited.load(Ordering::Relaxed))
@@ -230,10 +219,6 @@ impl PaneManager {
         false
     }
 
-    /// Closes the active pane.
-    /// If the tab has multiple panes, only the pane is removed (no undo).
-    /// If it was the last pane, the whole tab is closed (with undo unless last tab).
-    /// Returns `true` if the last tab was closed (caller should quit).
     pub fn close_active_pane(&mut self) -> bool {
         if self.tabs.active().panes.len() > 1 {
             let pi = self.tabs.active().active_pane;
@@ -250,17 +235,15 @@ impl PaneManager {
         }
     }
 
-    /// Closes the entire active tab (all its panes). Returns `true` if it was the last tab.
     fn close_active_tab(&mut self) -> bool {
         if let Some(tab) = self.tabs.remove_active() {
             self.pending_close.push((tab, Instant::now()));
             false
         } else {
-            true // last tab, nothing removed
+            true
         }
     }
 
-    /// Restores the most recently closed tab. Returns `true` if a tab was restored.
     pub fn undo_close(&mut self) -> bool {
         if let Some((tab, _)) = self.pending_close.pop() {
             self.tabs.push_and_activate(tab);
@@ -269,17 +252,14 @@ impl PaneManager {
         false
     }
 
-    /// Drops any pending-close tabs that have exceeded the undo timeout.
     pub fn reap_pending_close(&mut self) {
         self.pending_close.retain(|(_, closed_at)| closed_at.elapsed() < UNDO_TIMEOUT);
     }
 
-    /// Returns `true` if there are tabs waiting in the undo queue.
     pub fn has_pending_close(&self) -> bool {
         !self.pending_close.is_empty()
     }
 
-    /// Opens a new auto-named tab.
     pub fn open_tab(&mut self) -> Result<()> {
         let cwd = self.active_cwd();
         let pane_size = ContentArea::from(self.size).full_size();

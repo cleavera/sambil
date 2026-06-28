@@ -8,8 +8,6 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use crate::cursor::CursorStyle;
 use crate::size::PaneSize;
 
-/// vt100 callbacks implementation that captures OSC 2 window title sequences
-/// and DECSCUSR cursor shape sequences.
 #[derive(Default)]
 pub struct TitleCallbacks {
     pub title: Option<String>,
@@ -29,7 +27,6 @@ impl vt100::Callbacks for TitleCallbacks {
         params: &[&[u16]],
         c: char,
     ) {
-        // DECSCUSR: CSI Ps SP q — set cursor shape
         if c == 'q' && i1 == Some(b' ') {
             let ps = params.first().and_then(|p| p.first()).copied().unwrap_or(0);
             self.cursor_style = CursorStyle::from_decscusr(ps);
@@ -104,8 +101,6 @@ impl Pane {
         })
     }
 
-    /// Auto-computed name: OSC 2 title if set, otherwise cwd basename.
-    /// Used by `Tab::display_name()` when no explicit tab name is set.
     pub fn auto_name(&self) -> String {
         match self.parser.lock().unwrap().callbacks().title.as_deref() {
             Some(title) if !title.is_empty() => title.to_string(),

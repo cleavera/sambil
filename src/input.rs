@@ -152,7 +152,7 @@ fn handle_key(
         InputMode::Renaming(mut buf) => match code {
             KeyCode::Enter => {
                 if buf.is_empty() {
-                    manager.revert_active_name(); // revert to auto-named
+                    manager.revert_active_name();
                 } else {
                     manager.rename_active(buf);
                 }

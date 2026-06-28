@@ -59,8 +59,6 @@ pub fn load_or_create() -> Config {
     }
 }
 
-/// Parses a leader string like `"ctrl+b"` or `"ctrl+space"` into a
-/// `(KeyCode, KeyModifiers)` pair for matching against crossterm events.
 pub fn parse_leader(leader: &str) -> (KeyCode, KeyModifiers) {
     let lower = leader.trim().to_lowercase();
     if let Some(rest) = lower.strip_prefix("ctrl+") {
