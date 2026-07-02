@@ -2,9 +2,7 @@ use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use anyhow::Result;
-
-use crate::pane::{Pane, path_basename};
+use crate::pane::{Pane, SpawnError as PaneSpawnError, ResizeError as PaneResizeError, WriteError as PaneWriteError, path_basename};
 use crate::size::{ColOffset, ContentArea, TerminalSize};
 
 use as_source::AsSource;
@@ -205,6 +203,38 @@ pub enum UndoCloseError {
     NoPendingClosures,
 }
 
+#[derive(Debug, AsSource)]
+pub enum NewError {
+    #[from]
+    SpawnFailed(PaneSpawnError),
+}
+
+#[derive(Debug, AsSource)]
+pub enum OpenTabError {
+    #[from]
+    SpawnFailed(PaneSpawnError),
+}
+
+#[derive(Debug, AsSource)]
+pub enum ResizeError {
+    #[from]
+    PaneResizeFailed(PaneResizeError),
+}
+
+#[derive(Debug, AsSource)]
+pub enum SplitError {
+    #[from]
+    SpawnFailed(PaneSpawnError),
+    #[from]
+    ResizeFailed(ResizeError),
+}
+
+#[derive(Debug, AsSource)]
+pub enum WriteError {
+    #[from]
+    WriteFailed(PaneWriteError),
+}
+
 pub struct PaneManager {
     pub tabs: TabSet,
     pub size: TerminalSize,
@@ -212,7 +242,7 @@ pub struct PaneManager {
 }
 
 impl PaneManager {
-    pub fn new(size: TerminalSize) -> Result<Self> {
+    pub fn new(size: TerminalSize) -> Result<Self, NewError> {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
         let pane = Pane::spawn(&cwd, ContentArea::from(size).full_size())?;
         Ok(PaneManager {
@@ -309,7 +339,7 @@ impl PaneManager {
         !self.pending_close.is_empty()
     }
 
-    pub fn open_tab(&mut self) -> Result<()> {
+    pub fn open_tab(&mut self) -> Result<(), OpenTabError> {
         let cwd = self.active_cwd();
         let pane_size = ContentArea::from(self.size).full_size();
         let pane = Pane::spawn(&cwd, pane_size)?;
@@ -317,20 +347,21 @@ impl PaneManager {
         Ok(())
     }
 
-    pub fn open_tab_named(&mut self, name: String) -> Result<()> {
+    pub fn open_tab_named(&mut self, name: String) -> Result<(), OpenTabError> {
         self.open_tab()?;
         self.tabs.active_mut().name = Some(name);
         Ok(())
     }
 
-    pub fn split_horizontal(&mut self) -> Result<()> {
+    pub fn split_horizontal(&mut self) -> Result<(), SplitError> {
         let cwd = self.active_cwd();
         let new_pane = Pane::spawn(&cwd, ContentArea::from(self.size).full_size())?;
         self.tabs.active_mut().panes.push(new_pane);
         let n = self.tabs.active().panes.len();
         self.tabs.active_mut().active_pane = n - 1;
         let at = usize::from(self.tabs.active_index());
-        self.resize_tab_panes(at)
+        self.resize_tab_panes(at)?;
+        Ok(())
     }
 
     pub fn focus_next_pane(&mut self) {
@@ -347,7 +378,7 @@ impl PaneManager {
             .unwrap_or(n.saturating_sub(1));
     }
 
-    fn resize_tab_panes(&mut self, tab_idx: usize) -> Result<()> {
+    fn resize_tab_panes(&mut self, tab_idx: usize) -> Result<(), ResizeError> {
         let tab = match self.tabs.get_mut(tab_idx) {
             Some(t) => t,
             None => return Ok(()),
@@ -406,10 +437,11 @@ impl PaneManager {
         self.tabs.active().display_name()
     }
 
-    pub fn write_active(&mut self, data: &[u8]) -> Result<()> {
+    pub fn write_active(&mut self, data: &[u8]) -> Result<(), WriteError> {
         let tab = self.tabs.active_mut();
         let pi = tab.active_pane;
-        tab.panes[pi].write(data)
+        tab.panes[pi].write(data)?;
+        Ok(())
     }
 
     pub fn active_bracketed_paste(&self) -> bool {
@@ -434,7 +466,7 @@ impl PaneManager {
         self.tabs.switch_prev();
     }
 
-    pub fn resize(&mut self, size: TerminalSize) -> Result<()> {
+    pub fn resize(&mut self, size: TerminalSize) -> Result<(), ResizeError> {
         self.size = size;
         for i in 0..self.tabs.len() {
             self.resize_tab_panes(i)?;

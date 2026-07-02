@@ -11,9 +11,27 @@ mod size;
 use std::io;
 use std::panic;
 
+use as_source::AsSource;
 use crossterm::{cursor::Hide, cursor::Show, event, execute, terminal};
 
+use config::LoadConfigError;
+use input::EventLoopError;
+use pane_manager::NewError;
 use size::TerminalSize;
+
+#[derive(Debug, AsSource)]
+enum RunError {
+    AlreadyInSession,
+    CouldNotEnableRawMode(std::io::Error),
+    CouldNotSetupTerminal(std::io::Error),
+    CouldNotGetTerminalSize(std::io::Error),
+    #[from]
+    CouldNotLoadConfig(LoadConfigError),
+    #[from]
+    CouldNotInitialiseManager(NewError),
+    #[from]
+    EventLoopFailed(EventLoopError),
+}
 
 fn main() {
     let default_hook = panic::take_hook();
@@ -24,31 +42,31 @@ fn main() {
 
     if let Err(e) = run() {
         restore_terminal();
-        eprintln!("Error: {e}");
+        eprintln!("Error: {e:?}");
         std::process::exit(1);
     }
     restore_terminal();
 }
 
-fn run() -> anyhow::Result<()> {
+fn run() -> Result<(), RunError> {
     if std::env::var("SAMBIL").is_ok() {
-        anyhow::bail!("already inside a sambil session (set by $SAMBIL)");
+        return Err(RunError::AlreadyInSession);
     }
 
     let mut stdout = io::stdout();
 
-    terminal::enable_raw_mode()?;
+    terminal::enable_raw_mode().map_err(RunError::CouldNotEnableRawMode)?;
     execute!(
         stdout,
         terminal::EnterAlternateScreen,
         Hide,
         event::EnableBracketedPaste
-    )?;
+    ).map_err(RunError::CouldNotSetupTerminal)?;
 
-    let cfg = config::load_or_create();
+    let cfg = config::load_or_create()?;
     let leader = config::parse_leader(&cfg.leader);
 
-    let (cols, rows) = terminal::size()?;
+    let (cols, rows) = terminal::size().map_err(RunError::CouldNotGetTerminalSize)?;
     let size = TerminalSize::new_clamped(cols, rows);
     let mut manager = pane_manager::PaneManager::new(size)?;
     let mut renderer = renderer::Renderer::new(size);

@@ -1,13 +1,38 @@
 use std::io::Write;
 use std::time::Duration;
 
-use anyhow::Result;
+use as_source::AsSource;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
-use crate::pane_manager::{PaneManager, TabIndex};
-use crate::renderer::Renderer;
+use crate::pane_manager::{PaneManager, TabIndex, OpenTabError, SplitError, WriteError, ResizeError};
+use crate::renderer::{Renderer, DrawError};
 use crate::scroll::ScrollOffset;
 use crate::size::TerminalSize;
+
+#[derive(Debug, AsSource)]
+pub enum HandleKeyError {
+    #[from]
+    CouldNotOpenTab(OpenTabError),
+    #[from]
+    CouldNotSplitPane(SplitError),
+    #[from]
+    CouldNotWriteInput(WriteError),
+}
+
+#[derive(Debug, AsSource)]
+pub enum EventLoopError {
+    CouldNotFlushOutput(std::io::Error),
+    CouldNotPollEvents(std::io::Error),
+    CouldNotReadEvent(std::io::Error),
+    #[from]
+    CouldNotDraw(DrawError),
+    #[from]
+    CouldNotHandleKey(HandleKeyError),
+    #[from]
+    CouldNotWriteInput(WriteError),
+    #[from]
+    CouldNotResize(ResizeError),
+}
 
 enum InputMode {
     Normal,
@@ -25,7 +50,7 @@ pub fn event_loop<W: Write>(
     renderer: &mut Renderer,
     leader: (KeyCode, KeyModifiers),
     leader_str: &str,
-) -> Result<()> {
+) -> Result<(), EventLoopError> {
     let mut mode = InputMode::Normal;
 
     loop {
@@ -43,9 +68,9 @@ pub fn event_loop<W: Write>(
         };
         let show_help = matches!(mode, InputMode::Help);
         renderer.draw(out, manager, prompt.as_deref(), scroll_offset, show_help, leader_str)?;
-        out.flush()?;
+        out.flush().map_err(EventLoopError::CouldNotFlushOutput)?;
 
-        if !event::poll(Duration::from_millis(16))? {
+        if !event::poll(Duration::from_millis(16)).map_err(EventLoopError::CouldNotPollEvents)? {
             if manager.close_exited_tabs() {
                 return Ok(());
             }
@@ -53,7 +78,7 @@ pub fn event_loop<W: Write>(
             continue;
         }
 
-        match event::read()? {
+        match event::read().map_err(EventLoopError::CouldNotReadEvent)? {
             Event::Key(key) => {
                 mode = handle_key(key.code, key.modifiers, mode, manager, leader)?;
                 if matches!(mode, InputMode::Quit) {
@@ -87,7 +112,7 @@ fn handle_key(
     mode: InputMode,
     manager: &mut PaneManager,
     leader: (KeyCode, KeyModifiers),
-) -> Result<InputMode> {
+) -> Result<InputMode, HandleKeyError> {
     match mode {
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
@@ -97,7 +122,7 @@ fn handle_key(
                 }
             }
             KeyCode::Char('u') => {
-                manager.undo_close();
+                let _ = manager.undo_close();
             }
             KeyCode::Char('c') => {
                 manager.open_tab()?;
@@ -189,8 +214,7 @@ fn handle_key(
                 return Ok(InputMode::AwaitingCommand);
             }
             if let Some(bytes) = key_to_bytes(code, modifiers) {
-                manager.write_active(&bytes)?;
-            }
+                manager.write_active(&bytes)?;            }
         }
         InputMode::Quit => {}
     }

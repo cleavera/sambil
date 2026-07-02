@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use anyhow::Result;
+use as_source::AsSource;
 use crossterm::{
     cursor::{Hide, MoveTo, SetCursorStyle, Show},
     queue,
@@ -14,6 +14,34 @@ use crate::pane_manager::PaneManager;
 use crate::scroll::ScrollOffset;
 use crate::size::{ColOffset, TerminalSize};
 use crate::{cell::CellContent, pane_manager::TabActiveState};
+
+#[derive(Debug, AsSource)]
+pub enum ApplyAttrsError {
+    CouldNotResetAttributes(std::io::Error),
+    CouldNotSetForegroundColour(std::io::Error),
+    CouldNotSetBackgroundColour(std::io::Error),
+    CouldNotSetAttribute(std::io::Error),
+}
+
+#[derive(Debug, AsSource)]
+pub enum FlushDiffError {
+    CouldNotMoveCursor(std::io::Error),
+    CouldNotPrintCell(std::io::Error),
+    CouldNotResetAttributes(std::io::Error),
+    #[from]
+    CouldNotApplyAttributes(ApplyAttrsError),
+}
+
+#[derive(Debug, AsSource)]
+pub enum DrawError {
+    CouldNotClearScreen(std::io::Error),
+    CouldNotHideCursor(std::io::Error),
+    CouldNotShowCursor(std::io::Error),
+    CouldNotMoveCursor(std::io::Error),
+    CouldNotSetCursorStyle(std::io::Error),
+    #[from]
+    CouldNotFlushDiff(FlushDiffError),
+}
 
 #[derive(Clone, PartialEq, Default)]
 struct Attrs {
@@ -100,12 +128,12 @@ impl Renderer {
         scroll_offset: ScrollOffset,
         show_help: bool,
         leader: &str,
-    ) -> Result<()> {
+    ) -> Result<(), DrawError> {
         if show_help != self.prev_show_help {
             queue!(
                 out,
                 crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
-            )?;
+            ).map_err(DrawError::CouldNotClearScreen)?;
             self.prev = FrameBuffer::new(manager.size);
             self.prev_show_help = show_help;
         }
@@ -122,12 +150,12 @@ impl Renderer {
             None => paint_tab_bar(&mut next, manager),
         }
 
-        queue!(out, Hide)?;
+        queue!(out, Hide).map_err(DrawError::CouldNotHideCursor)?;
         self.flush_diff(out, &next)?;
         self.prev = next;
 
         if show_help || prompt.is_some() {
-            queue!(out, Hide)?;
+            queue!(out, Hide).map_err(DrawError::CouldNotHideCursor)?;
         } else {
             let col_offset = manager.active_pane_col_offset();
             let tab = manager.tabs.active();
@@ -141,18 +169,18 @@ impl Renderer {
                 (r, c, hide, ps)
             };
             if hide {
-                queue!(out, Hide)?;
+                queue!(out, Hide).map_err(DrawError::CouldNotHideCursor)?;
             } else {
-                queue!(out, MoveTo(cur_col + u16::from(col_offset), cur_row + 1))?;
-                queue!(out, cursor_style_to_crossterm(ps))?;
-                queue!(out, Show)?;
+                queue!(out, MoveTo(cur_col + u16::from(col_offset), cur_row + 1)).map_err(DrawError::CouldNotMoveCursor)?;
+                queue!(out, cursor_style_to_crossterm(ps)).map_err(DrawError::CouldNotSetCursorStyle)?;
+                queue!(out, Show).map_err(DrawError::CouldNotShowCursor)?;
             }
         }
 
         Ok(())
     }
 
-    fn flush_diff<W: Write>(&self, out: &mut W, next: &FrameBuffer) -> Result<()> {
+    fn flush_diff<W: Write>(&self, out: &mut W, next: &FrameBuffer) -> Result<(), FlushDiffError> {
         let mut cursor: Option<(u16, u16)> = None;
         let mut current_attrs = Attrs::default();
 
@@ -171,7 +199,7 @@ impl Renderer {
                 }
 
                 if cursor != Some((row, col)) {
-                    queue!(out, MoveTo(col, row))?;
+                    queue!(out, MoveTo(col, row)).map_err(FlushDiffError::CouldNotMoveCursor)?;
                 }
 
                 if new_cell.attrs != current_attrs {
@@ -179,35 +207,35 @@ impl Renderer {
                     current_attrs = new_cell.attrs.clone();
                 }
 
-                queue!(out, Print(new_cell.content.as_str()))?;
+                queue!(out, Print(new_cell.content.as_str())).map_err(FlushDiffError::CouldNotPrintCell)?;
                 let char_width = UnicodeWidthStr::width(new_cell.content.as_str()).max(1) as u16;
                 cursor = Some((row, col + char_width));
             }
         }
 
         if current_attrs != (Attrs::default()) {
-            queue!(out, SetAttribute(Attribute::Reset))?;
+            queue!(out, SetAttribute(Attribute::Reset)).map_err(FlushDiffError::CouldNotResetAttributes)?;
         }
 
         Ok(())
     }
 }
 
-fn apply_attrs<W: Write>(out: &mut W, attrs: &Attrs) -> Result<()> {
-    queue!(out, SetAttribute(Attribute::Reset))?;
-    queue!(out, SetForegroundColor(vt100_color_to_crossterm(attrs.fg)))?;
-    queue!(out, SetBackgroundColor(vt100_color_to_crossterm(attrs.bg)))?;
+fn apply_attrs<W: Write>(out: &mut W, attrs: &Attrs) -> Result<(), ApplyAttrsError> {
+    queue!(out, SetAttribute(Attribute::Reset)).map_err(ApplyAttrsError::CouldNotResetAttributes)?;
+    queue!(out, SetForegroundColor(vt100_color_to_crossterm(attrs.fg))).map_err(ApplyAttrsError::CouldNotSetForegroundColour)?;
+    queue!(out, SetBackgroundColor(vt100_color_to_crossterm(attrs.bg))).map_err(ApplyAttrsError::CouldNotSetBackgroundColour)?;
     if attrs.bold {
-        queue!(out, SetAttribute(Attribute::Bold))?;
+        queue!(out, SetAttribute(Attribute::Bold)).map_err(ApplyAttrsError::CouldNotSetAttribute)?;
     }
     if attrs.italic {
-        queue!(out, SetAttribute(Attribute::Italic))?;
+        queue!(out, SetAttribute(Attribute::Italic)).map_err(ApplyAttrsError::CouldNotSetAttribute)?;
     }
     if attrs.underline {
-        queue!(out, SetAttribute(Attribute::Underlined))?;
+        queue!(out, SetAttribute(Attribute::Underlined)).map_err(ApplyAttrsError::CouldNotSetAttribute)?;
     }
     if attrs.inverse {
-        queue!(out, SetAttribute(Attribute::Reverse))?;
+        queue!(out, SetAttribute(Attribute::Reverse)).map_err(ApplyAttrsError::CouldNotSetAttribute)?;
     }
     Ok(())
 }

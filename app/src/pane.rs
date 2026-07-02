@@ -2,11 +2,30 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use anyhow::Result;
+use as_source::AsSource;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
 use crate::cursor::CursorStyle;
 use crate::size::PaneSize;
+
+#[derive(Debug, AsSource)]
+pub enum SpawnError {
+    CouldNotOpenTerminal(Box<dyn std::error::Error + Send + Sync>),
+    FailedToSpawn(Box<dyn std::error::Error + Send + Sync>),
+    FailedToTakeWriter(Box<dyn std::error::Error + Send + Sync>),
+    CouldNotCloneReader(Box<dyn std::error::Error + Send + Sync>),
+}
+
+#[derive(Debug, AsSource)]
+pub enum ResizeError {
+    CouldNotResize(Box<dyn std::error::Error + Send + Sync>),
+}
+
+#[derive(Debug, AsSource)]
+pub enum WriteError {
+    #[from]
+    IoFailed(std::io::Error),
+}
 
 #[derive(Default)]
 pub struct TitleCallbacks {
@@ -47,14 +66,14 @@ pub struct Pane {
 }
 
 impl Pane {
-    pub fn spawn(cwd: &std::path::Path, size: PaneSize) -> Result<Self> {
+    pub fn spawn(cwd: &std::path::Path, size: PaneSize) -> Result<Self, SpawnError> {
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows: size.rows(),
             cols: size.cols(),
             pixel_width: 0,
             pixel_height: 0,
-        })?;
+        }).map_err(|e| SpawnError::CouldNotOpenTerminal(e.into()))?;
 
         let shell = default_shell();
         let mut cmd = CommandBuilder::new(&shell);
@@ -62,11 +81,11 @@ impl Pane {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("SAMBIL", "1");
-        let child = pair.slave.spawn_command(cmd)?;
+        let child = pair.slave.spawn_command(cmd).map_err(|e| SpawnError::FailedToSpawn(e.into()))?;
         let child_pid = child.process_id();
 
-        let writer = pair.master.take_writer()?;
-        let mut reader = pair.master.try_clone_reader()?;
+        let writer = pair.master.take_writer().map_err(|e| SpawnError::FailedToTakeWriter(e.into()))?;
+        let mut reader = pair.master.try_clone_reader().map_err(|e| SpawnError::CouldNotCloneReader(e.into()))?;
 
         let parser = Arc::new(Mutex::new(
             vt100::Parser::new_with_callbacks(size.rows(), size.cols(), 1000, TitleCallbacks::default()),
@@ -108,12 +127,12 @@ impl Pane {
         }
     }
 
-    pub fn write(&mut self, data: &[u8]) -> Result<()> {
+    pub fn write(&mut self, data: &[u8]) -> Result<(), WriteError> {
         self.writer.write_all(data)?;
         Ok(())
     }
 
-    pub fn resize(&mut self, size: PaneSize) -> Result<()> {
+    pub fn resize(&mut self, size: PaneSize) -> Result<(), ResizeError> {
         self.width = size.cols();
         self.height = size.rows();
         self.master.resize(portable_pty::PtySize {
@@ -121,7 +140,7 @@ impl Pane {
             cols: size.cols(),
             pixel_width: 0,
             pixel_height: 0,
-        })?;
+        }).map_err(|e| ResizeError::CouldNotResize(e.into()))?;
         self.parser.lock().unwrap().screen_mut().set_size(size.rows(), size.cols());
         Ok(())
     }

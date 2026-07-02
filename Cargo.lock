@@ -481,7 +481,6 @@ dependencies = [
 name = "sambil"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "as_source",
  "crossterm",
  "libproc",

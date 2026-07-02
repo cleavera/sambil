@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use as_source::AsSource;
 use crossterm::event::{KeyCode, KeyModifiers};
 use serde::{Deserialize, Serialize};
 
@@ -27,8 +28,7 @@ impl Default for Config {
     }
 }
 
-pub fn config_dir() -> PathBuf {
-    #[cfg(windows)]
+pub fn config_dir() -> PathBuf {    #[cfg(windows)]
     {
         if let Ok(appdata) = std::env::var("APPDATA") {
             return PathBuf::from(appdata).join("sambil");
@@ -43,20 +43,26 @@ pub fn config_dir() -> PathBuf {
     }
 }
 
-pub fn load_or_create() -> Config {
+#[derive(Debug, AsSource)]
+pub enum LoadConfigError {
+    CouldNotCreateConfigDir(std::io::Error),
+    CouldNotWriteDefaultConfig(std::io::Error),
+    CouldNotReadConfig(std::io::Error),
+    CouldNotParseConfig(toml::de::Error),
+}
+
+pub fn load_or_create() -> Result<Config, LoadConfigError> {
     let dir = config_dir();
     let path = dir.join("config.toml");
 
     if !path.exists() {
-        let _ = std::fs::create_dir_all(&dir);
-        let _ = std::fs::write(&path, DEFAULT_CONFIG);
-        return Config::default();
+        std::fs::create_dir_all(&dir).map_err(LoadConfigError::CouldNotCreateConfigDir)?;
+        std::fs::write(&path, DEFAULT_CONFIG).map_err(LoadConfigError::CouldNotWriteDefaultConfig)?;
+        return Ok(Config::default());
     }
 
-    match std::fs::read_to_string(&path) {
-        Ok(content) => toml::from_str(&content).unwrap_or_default(),
-        Err(_) => Config::default(),
-    }
+    let content = std::fs::read_to_string(&path).map_err(LoadConfigError::CouldNotReadConfig)?;
+    toml::from_str(&content).map_err(LoadConfigError::CouldNotParseConfig)
 }
 
 pub fn parse_leader(leader: &str) -> (KeyCode, KeyModifiers) {
