@@ -4,7 +4,7 @@ use std::time::Duration;
 use as_source::AsSource;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 
-use crate::pane_manager::{PaneManager, TabIndex, OpenTabError, SplitError, WriteError, ResizeError};
+use crate::pane_manager::{PaneManager, TabIndex, CloseTabError, OpenTabError, SplitError, WriteError, ResizeError};
 use crate::renderer::{Renderer, DrawError};
 use crate::scroll::ScrollOffset;
 use crate::size::TerminalSize;
@@ -17,6 +17,8 @@ pub enum HandleKeyError {
     CouldNotSplitPane(SplitError),
     #[from]
     CouldNotWriteInput(WriteError),
+    #[from]
+    CouldNotClosePane(CloseTabError),
 }
 
 #[derive(Debug, AsSource)]
@@ -32,6 +34,8 @@ pub enum EventLoopError {
     CouldNotWriteInput(WriteError),
     #[from]
     CouldNotResize(ResizeError),
+    #[from]
+    CouldNotCloseTab(CloseTabError),
 }
 
 enum InputMode {
@@ -71,9 +75,9 @@ pub fn event_loop<W: Write>(
         out.flush().map_err(EventLoopError::CouldNotFlushOutput)?;
 
         if !event::poll(Duration::from_millis(16)).map_err(EventLoopError::CouldNotPollEvents)? {
-            if manager.close_exited_tabs() {
-                return Ok(());
-            }
+        if let Err(CloseTabError::TriedToCloseFinalTab) = manager.close_exited_tabs() {
+            return Ok(());
+        }
             manager.reap_pending_close();
             continue;
         }
@@ -117,7 +121,7 @@ fn handle_key(
         InputMode::AwaitingCommand => match code {
             KeyCode::Char('q') => return Ok(InputMode::Quit),
             KeyCode::Char('x') => {
-                if manager.close_active_pane() {
+                if let Err(CloseTabError::TriedToCloseFinalTab) = manager.close_active_pane() {
                     return Ok(InputMode::Quit);
                 }
             }

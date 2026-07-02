@@ -199,6 +199,11 @@ impl Tab {
 }
 
 #[derive(Debug, AsSource)]
+pub enum CloseTabError {
+    TriedToCloseFinalTab,
+}
+
+#[derive(Debug, AsSource)]
 pub enum UndoCloseError {
     NoPendingClosures,
 }
@@ -252,7 +257,7 @@ impl PaneManager {
         })
     }
 
-    pub fn close_exited_tabs(&mut self) -> bool {
+    pub fn close_exited_tabs(&mut self) -> Result<(), CloseTabError> {
         let mut ti = 0;
         while ti < self.tabs.len() {
             let mut changed = false;
@@ -286,17 +291,17 @@ impl PaneManager {
 
             if last_exited {
                 if self.tabs.len() == 1 {
-                    return true;
+                    return Err(CloseTabError::TriedToCloseFinalTab);
                 }
                 self.tabs.remove_at(ti);
             } else {
                 ti += 1;
             }
         }
-        false
+        Ok(())
     }
 
-    pub fn close_active_pane(&mut self) -> bool {
+    pub fn close_active_pane(&mut self) -> Result<(), CloseTabError> {
         if self.tabs.active().panes.len() > 1 {
             let pi = self.tabs.active().active_pane;
             self.tabs.active_mut().panes.remove(pi);
@@ -306,18 +311,18 @@ impl PaneManager {
             }
             let at = usize::from(self.tabs.active_index());
             let _ = self.resize_tab_panes(at);
-            false
+            Ok(())
         } else {
             self.close_active_tab()
         }
     }
 
-    fn close_active_tab(&mut self) -> bool {
+    fn close_active_tab(&mut self) -> Result<(), CloseTabError> {
         if let Some(tab) = self.tabs.remove_active() {
             self.pending_close.push((tab, Instant::now()));
-            false
+            Ok(())
         } else {
-            true
+            Err(CloseTabError::TriedToCloseFinalTab)
         }
     }
 
