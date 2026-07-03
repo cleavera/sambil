@@ -92,7 +92,7 @@ pub fn event_loop<W: Write>(
         }
 
         match event::read().map_err(EventLoopError::CouldNotReadEvent)? {
-            Event::Key(key) => {
+            Event::Key(key) if key.kind == event::KeyEventKind::Press => {
                 mode = handle_key(key.code, key.modifiers, mode, manager, leader)?;
                 if matches!(mode, InputMode::Quit) {
                     return Ok(());
