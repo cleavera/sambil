@@ -159,7 +159,7 @@ impl Renderer {
         } else {
             let col_offset = manager.active_pane_col_offset();
             let tab = manager.tabs.active();
-            let active_pane = &tab.panes[tab.active_pane];
+            let active_pane = tab.panes.active();
             let (cur_row, cur_col, hide, ps) = {
                 let parser = active_pane.parser.lock().unwrap();
                 let screen = parser.screen();
@@ -262,21 +262,21 @@ fn cursor_style_to_crossterm(style: CursorStyle) -> SetCursorStyle {
 
 fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: ScrollOffset) {
     let tab = manager.tabs.active();
-    let n = tab.panes.len();
     let mid_row = (buf.size.rows() + 1) / 2;
     let mut col_offset = ColOffset::zero();
-    for (i, pane) in tab.panes.iter().enumerate() {
-        let offset = if i == tab.active_pane {
+    let mut iter = tab.panes.iter().peekable();
+    while let Some(pane) = iter.next() {
+        let offset = if tab.panes.is_active(pane) {
             scroll_offset
         } else {
             ScrollOffset::zero()
         };
         paint_pane(buf, pane, col_offset, offset);
-        if i + 1 < n {
+        if let Some(&next) = iter.peek() {
             let divider_col = u16::from(col_offset) + pane.width;
-            let indicator = if i == tab.active_pane {
+            let indicator = if tab.panes.is_active(pane) {
                 "◀"
-            } else if i + 1 == tab.active_pane {
+            } else if tab.panes.is_active(next) {
                 "▶"
             } else {
                 "│"
@@ -303,8 +303,6 @@ fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset:
                 );
             }
             col_offset = col_offset.advance_past_pane(pane.width);
-        } else {
-            col_offset = ColOffset::zero();
         }
     }
 }

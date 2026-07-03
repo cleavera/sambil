@@ -175,17 +175,108 @@ impl TabSet {
     }
 }
 
+pub struct PaneSet {
+    panes: Vec<Pane>,
+    active: usize,
+}
+
+impl PaneSet {
+    pub fn new(first: Pane) -> Self {
+        PaneSet {
+            panes: vec![first],
+            active: 0,
+        }
+    }
+
+    pub fn active(&self) -> &Pane {
+        &self.panes[self.active]
+    }
+
+    pub fn active_mut(&mut self) -> &mut Pane {
+        &mut self.panes[self.active]
+    }
+
+    pub fn len(&self) -> usize {
+        self.panes.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &Pane> {
+        self.panes.iter()
+    }
+
+    pub fn is_active(&self, pane: &Pane) -> bool {
+        std::ptr::eq(pane, self.active())
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Pane> {
+        self.panes.iter_mut()
+    }
+
+    pub fn panes_before_active(&self) -> impl Iterator<Item = &Pane> {
+        self.panes[..self.active].iter()
+    }
+
+    pub fn push_and_activate(&mut self, pane: Pane) {
+        self.panes.push(pane);
+        self.active = self.panes.len() - 1;
+    }
+
+    pub fn remove_active(&mut self) -> Option<Pane> {
+        if self.panes.len() == 1 {
+            return None;
+        }
+        let pane = self.panes.remove(self.active);
+        if self.active >= self.panes.len() {
+            self.active = self.panes.len() - 1;
+        }
+        Some(pane)
+    }
+
+    pub fn focus_next(&mut self) {
+        self.active = (self.active + 1) % self.panes.len();
+    }
+
+    pub fn focus_prev(&mut self) {
+        let n = self.panes.len();
+        self.active = self.active.checked_sub(1).unwrap_or(n.saturating_sub(1));
+    }
+
+    pub fn remove_exited_non_last(&mut self) -> bool {
+        let mut changed = false;
+        let mut pi = 0;
+        while pi < self.panes.len().saturating_sub(1) {
+            if self.panes[pi].exited.load(Ordering::Relaxed) {
+                self.panes.remove(pi);
+                changed = true;
+                if self.active > pi && self.active > 0 {
+                    self.active -= 1;
+                } else if self.active >= self.panes.len() {
+                    self.active = self.panes.len() - 1;
+                }
+            } else {
+                pi += 1;
+            }
+        }
+        changed
+    }
+
+    pub fn last_has_exited(&self) -> bool {
+        self.panes
+            .last()
+            .map(|p| p.exited.load(Ordering::Relaxed))
+            .unwrap_or(false)
+    }
+}
+
 pub struct Tab {
-    pub panes: Vec<Pane>,
-    pub active_pane: usize,
+    pub panes: PaneSet,
     pub name: Option<String>,
 }
 
 impl Tab {
     pub fn new(pane: Pane) -> Self {
         Tab {
-            panes: vec![pane],
-            active_pane: 0,
+            panes: PaneSet::new(pane),
             name: None,
         }
     }
@@ -194,7 +285,7 @@ impl Tab {
         if let Some(ref name) = self.name {
             return name.clone();
         }
-        self.panes[self.active_pane].auto_name()
+        self.panes.active().auto_name()
     }
 }
 
@@ -260,36 +351,12 @@ impl PaneManager {
     pub fn close_exited_tabs(&mut self) -> Result<(), CloseTabError> {
         let mut ti = 0;
         while ti < self.tabs.len() {
-            let mut changed = false;
-            {
-                let tab = self.tabs.get_mut(ti).unwrap();
-                let mut pi = 0;
-                while pi < tab.panes.len().saturating_sub(1) {
-                    if tab.panes[pi].exited.load(Ordering::Relaxed) {
-                        tab.panes.remove(pi);
-                        changed = true;
-                        if tab.active_pane > pi && tab.active_pane > 0 {
-                            tab.active_pane -= 1;
-                        } else if tab.active_pane >= tab.panes.len() {
-                            tab.active_pane = tab.panes.len() - 1;
-                        }
-                    } else {
-                        pi += 1;
-                    }
-                }
-            }
+            let changed = self.tabs.get_mut(ti).unwrap().panes.remove_exited_non_last();
             if changed {
                 let _ = self.resize_tab_panes(ti);
             }
 
-            let last_exited = self
-                .tabs
-                .get(ti)
-                .and_then(|t| t.panes.last())
-                .map(|p| p.exited.load(Ordering::Relaxed))
-                .unwrap_or(false);
-
-            if last_exited {
+            if self.tabs.get(ti).map(|t| t.panes.last_has_exited()).unwrap_or(false) {
                 if self.tabs.len() == 1 {
                     return Err(CloseTabError::TriedToCloseFinalTab);
                 }
@@ -302,13 +369,7 @@ impl PaneManager {
     }
 
     pub fn close_active_pane(&mut self) -> Result<(), CloseTabError> {
-        if self.tabs.active().panes.len() > 1 {
-            let pi = self.tabs.active().active_pane;
-            self.tabs.active_mut().panes.remove(pi);
-            let tab = self.tabs.active_mut();
-            if tab.active_pane >= tab.panes.len() {
-                tab.active_pane = tab.panes.len() - 1;
-            }
+        if self.tabs.active_mut().panes.remove_active().is_some() {
             let at = usize::from(self.tabs.active_index());
             let _ = self.resize_tab_panes(at);
             Ok(())
@@ -361,26 +422,18 @@ impl PaneManager {
     pub fn split_horizontal(&mut self) -> Result<(), SplitError> {
         let cwd = self.active_cwd();
         let new_pane = Pane::spawn(&cwd, ContentArea::from(self.size).full_size())?;
-        self.tabs.active_mut().panes.push(new_pane);
-        let n = self.tabs.active().panes.len();
-        self.tabs.active_mut().active_pane = n - 1;
+        self.tabs.active_mut().panes.push_and_activate(new_pane);
         let at = usize::from(self.tabs.active_index());
         self.resize_tab_panes(at)?;
         Ok(())
     }
 
     pub fn focus_next_pane(&mut self) {
-        let tab = self.tabs.active_mut();
-        tab.active_pane = (tab.active_pane + 1) % tab.panes.len();
+        self.tabs.active_mut().panes.focus_next();
     }
 
     pub fn focus_prev_pane(&mut self) {
-        let tab = self.tabs.active_mut();
-        let n = tab.panes.len();
-        tab.active_pane = tab
-            .active_pane
-            .checked_sub(1)
-            .unwrap_or(n.saturating_sub(1));
+        self.tabs.active_mut().panes.focus_prev();
     }
 
     fn resize_tab_panes(&mut self, tab_idx: usize) -> Result<(), ResizeError> {
@@ -402,15 +455,14 @@ impl PaneManager {
     pub fn active_pane_col_offset(&self) -> ColOffset {
         let tab = self.tabs.active();
         let mut offset = ColOffset::zero();
-        for i in 0..tab.active_pane {
-            offset = offset.advance_past_pane(tab.panes[i].width);
+        for pane in tab.panes.panes_before_active() {
+            offset = offset.advance_past_pane(pane.width);
         }
         offset
     }
 
     pub fn active_cwd(&self) -> PathBuf {
-        let tab = self.tabs.active();
-        let pane = &tab.panes[tab.active_pane];
+        let pane = self.tabs.active().panes.active();
         #[cfg(target_os = "linux")]
         if let Some(pid) = pane.child_pid {
             if let Ok(path) = std::fs::read_link(format!("/proc/{}/cwd", pid)) {
@@ -443,15 +495,12 @@ impl PaneManager {
     }
 
     pub fn write_active(&mut self, data: &[u8]) -> Result<(), WriteError> {
-        let tab = self.tabs.active_mut();
-        let pi = tab.active_pane;
-        tab.panes[pi].write(data)?;
+        self.tabs.active_mut().panes.active_mut().write(data)?;
         Ok(())
     }
 
     pub fn active_bracketed_paste(&self) -> bool {
-        let tab = self.tabs.active();
-        tab.panes[tab.active_pane]
+        self.tabs.active().panes.active()
             .parser
             .lock()
             .unwrap()
