@@ -26,7 +26,7 @@ fn tmp_config_dir(label: &str) -> std::path::PathBuf {
 fn config_file_created_on_first_launch() {
     let tmp = tmp_config_dir("create");
 
-    let mut session =
+    let session =
         TestSession::spawn_sambil_with_env(80, 24, &[("XDG_CONFIG_HOME", tmp.to_str().unwrap())]);
 
     session.assert_running();

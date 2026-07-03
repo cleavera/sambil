@@ -1,8 +1,6 @@
 mod common;
 
-use std::time::Duration;
-
-use common::{CTRL_B, TestSession};
+use common::TestSession;
 
 /// Ctrl-b c opens a new tab instantly using the cwd as the name — no prompt.
 #[test]

@@ -2,7 +2,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{CTRL_B, TestSession};
+use common::TestSession;
 
 /// The active tab's `*` marker should be rendered with a coloured background
 /// (AnsiValue 32 = blue) to distinguish it from the rest of the bar.

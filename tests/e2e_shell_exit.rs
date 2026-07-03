@@ -2,7 +2,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{CTRL_B, TestSession};
+use common::TestSession;
 
 /// Typing `exit` in the only tab should cause sambil to exit cleanly.
 #[test]
