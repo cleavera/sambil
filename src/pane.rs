@@ -159,8 +159,10 @@ impl Pane {
                     Ok(n) => {
                         read_count += 1;
                         #[cfg(feature = "debug-log")]
-                        if read_count <= 5 {
-                            debug_log::log(format!("reader thread: read #{read_count} got {n} bytes"));
+                        if read_count <= 10 {
+                            let hex: Vec<String> = buf[..n].iter().map(|b| format!("{b:02x}")).collect();
+                            let printable: String = buf[..n].iter().map(|&b| if b >= 0x20 && b < 0x7f { b as char } else { '.' }).collect();
+                            debug_log::log(format!("reader thread: read #{read_count} got {n} bytes | hex: {} | ascii: {printable:?}", hex.join(" ")));
                         }
                         parser_clone.lock().unwrap().process(&buf[..n]);
                     }
