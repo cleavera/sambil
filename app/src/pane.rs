@@ -124,7 +124,7 @@ impl Pane {
         self.exited.load(Ordering::Relaxed)
     }
 
-    pub fn auto_name(&self) -> String {
+    pub fn get_auto_name(&self) -> String {
         match self.parser.lock().unwrap().callbacks().title.as_deref() {
             Some(title) if !title.is_empty() => title.to_string(),
             _ => path_basename(&self.cwd),

@@ -90,7 +90,7 @@ pub fn event_loop<W: Write>(
                 }
             }
             Event::Paste(text) => {
-                let bytes = if manager.active_bracketed_paste() {
+                let bytes = if manager.is_active_pane_bracketed_paste() {
                     let mut v = b"\x1b[200~".to_vec();
                     v.extend_from_slice(text.as_bytes());
                     v.extend_from_slice(b"\x1b[201~");
@@ -134,7 +134,7 @@ fn handle_key(
             }
             KeyCode::Char('C') => return Ok(InputMode::Naming(String::new())),
             KeyCode::Char('r') => {
-                let current = manager.active_name().to_string();
+                let current = manager.get_active_name().to_string();
                 return Ok(InputMode::Renaming(current));
             }
             KeyCode::Char('|') => {

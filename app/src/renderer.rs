@@ -157,9 +157,9 @@ impl Renderer {
         if show_help || prompt.is_some() {
             queue!(out, Hide).map_err(DrawError::CouldNotHideCursor)?;
         } else {
-            let col_offset = manager.active_pane_col_offset();
-            let tab = manager.tabs.active();
-            let active_pane = tab.panes.active();
+            let col_offset = manager.get_active_pane_col_offset();
+            let tab = manager.tabs.get_active();
+            let active_pane = tab.panes.get_active();
             let (cur_row, cur_col, hide, ps) = {
                 let parser = active_pane.parser.lock().unwrap();
                 let screen = parser.screen();
@@ -261,7 +261,7 @@ fn cursor_style_to_crossterm(style: CursorStyle) -> SetCursorStyle {
 }
 
 fn paint_active_tab(buf: &mut FrameBuffer, manager: &PaneManager, scroll_offset: ScrollOffset) {
-    let tab = manager.tabs.active();
+    let tab = manager.tabs.get_active();
     let mid_row = (buf.size.rows() + 1) / 2;
     let mut col_offset = ColOffset::zero();
     let mut iter = tab.panes.iter().peekable();
@@ -376,7 +376,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
             TabActiveState::Inactive => ((tab_num + 1).to_string(), inactive_fg, bar_bg, false),
         };
 
-        let label = format!(" [{}:{}] ", indicator, tab.display_name());
+        let label = format!(" [{}:{}] ", indicator, tab.get_display_name());
         let attrs = Attrs {
             fg,
             bg,
@@ -400,7 +400,7 @@ fn paint_tab_bar(buf: &mut FrameBuffer, manager: &PaneManager) {
         }
     }
 
-    if manager.has_pending_close() {
+    if manager.is_pending_close() {
         let hint = " ↩ u ";
         let hint_col = manager
             .size
