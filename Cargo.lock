@@ -24,21 +24,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f02882884d3e1bc524fb12c79f107f6ad0e1cfd498c536ffb494301740995dfe"
 
 [[package]]
-name = "as_source"
-version = "0.1.0"
-dependencies = [
- "as_source_macros",
-]
-
-[[package]]
-name = "as_source_macros"
-version = "0.1.0"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -204,6 +189,25 @@ dependencies = [
  "libc",
  "thiserror",
  "winapi",
+]
+
+[[package]]
+name = "foible"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0129c4e0fd2530cb790714deabc1624ac49e0e81037bcee915740a6ba2230c6"
+dependencies = [
+ "foible-derive",
+]
+
+[[package]]
+name = "foible-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "904d21bd841e7a03876f5ddd7cf564e2c679cd00a33c5de92ac44e7206a791cb"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -481,8 +485,8 @@ dependencies = [
 name = "sambil"
 version = "0.1.0"
 dependencies = [
- "as_source",
  "crossterm",
+ "foible",
  "libproc",
  "portable-pty",
  "serde",
