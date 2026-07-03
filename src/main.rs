@@ -1,8 +1,6 @@
 mod cell;
 mod config;
 mod cursor;
-#[cfg(feature = "debug-log")]
-mod debug_log;
 mod input;
 mod pane;
 mod pane_manager;

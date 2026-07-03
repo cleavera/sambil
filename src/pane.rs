@@ -8,9 +8,6 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use crate::cursor::CursorStyle;
 use crate::size::PaneSize;
 
-#[cfg(feature = "debug-log")]
-use crate::debug_log;
-
 #[derive(Debug, AsSource)]
 pub enum SpawnError {
     CouldNotOpenTerminal(Box<dyn std::error::Error + Send + Sync>),
@@ -70,9 +67,6 @@ pub struct Pane {
 
 impl Pane {
     pub fn spawn(cwd: &std::path::Path, size: PaneSize) -> Result<Self, SpawnError> {
-        #[cfg(feature = "debug-log")]
-        debug_log::log(format!("spawn: opening PTY {}x{}", size.cols(), size.rows()));
-
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -83,14 +77,7 @@ impl Pane {
             })
             .map_err(|e| SpawnError::CouldNotOpenTerminal(e.into()))?;
 
-        #[cfg(feature = "debug-log")]
-        debug_log::log("spawn: PTY opened");
-
         let shell = default_shell();
-
-        #[cfg(feature = "debug-log")]
-        debug_log::log(format!("spawn: launching shell: {shell}"));
-
         let mut cmd = CommandBuilder::new(&shell);
         cmd.cwd(cwd);
         cmd.env("TERM", "xterm-256color");
@@ -103,16 +90,10 @@ impl Pane {
             .map_err(|e| SpawnError::FailedToSpawn(e.into()))?;
         let child_pid = child.process_id();
 
-        #[cfg(feature = "debug-log")]
-        debug_log::log(format!("spawn: child started, pid={child_pid:?}"));
-
         // On Windows (ConPTY), the slave handle must be closed before ConPTY
         // will begin routing the child's output to the master read pipe.
         let master = pair.master;
         drop(pair.slave);
-
-        #[cfg(feature = "debug-log")]
-        debug_log::log("spawn: slave dropped");
 
         let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
             master
@@ -122,9 +103,6 @@ impl Pane {
         let mut reader = master
             .try_clone_reader()
             .map_err(|e| SpawnError::CouldNotCloneReader(e.into()))?;
-
-        #[cfg(feature = "debug-log")]
-        debug_log::log("spawn: reader cloned, spawning reader thread");
 
         let parser = Arc::new(Mutex::new(vt100::Parser::new_with_callbacks(
             size.rows(),
@@ -138,33 +116,12 @@ impl Pane {
         let exited_clone = Arc::clone(&exited);
 
         std::thread::spawn(move || {
-            #[cfg(feature = "debug-log")]
-            debug_log::log("reader thread: started");
-
             let mut buf = [0u8; 4096];
-            let mut read_count = 0u64;
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) => {
-                        #[cfg(feature = "debug-log")]
-                        debug_log::log(format!("reader thread: Ok(0) after {read_count} reads — EOF, exiting"));
-                        break;
-                    }
-                    Err(e) => {
-                        #[cfg(feature = "debug-log")]
-                        debug_log::log(format!("reader thread: Err after {read_count} reads — {e:?}, exiting"));
-                        break;
-                    }
+                    Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        read_count += 1;
                         let data = &buf[..n];
-
-                        #[cfg(feature = "debug-log")]
-                        if read_count <= 10 {
-                            let hex: Vec<String> = data.iter().map(|b| format!("{b:02x}")).collect();
-                            let printable: String = data.iter().map(|&b| if b >= 0x20 && b < 0x7f { b as char } else { '.' }).collect();
-                            debug_log::log(format!("reader thread: read #{read_count} got {n} bytes | hex: {} | ascii: {printable:?}", hex.join(" ")));
-                        }
 
                         // ConPTY sends ESC[6n (cursor position request) as a handshake.
                         // It will block indefinitely until we reply with ESC[row;colR.
@@ -175,9 +132,6 @@ impl Pane {
                             };
                             let response = format!("\x1b[{};{}R", row + 1, col + 1);
                             let _ = writer_clone.lock().unwrap().write_all(response.as_bytes());
-
-                            #[cfg(feature = "debug-log")]
-                            debug_log::log(format!("reader thread: replied to ESC[6n with ESC[{};{}R", row + 1, col + 1));
                         }
 
                         parser_clone.lock().unwrap().process(data);
@@ -185,13 +139,7 @@ impl Pane {
                 }
             }
             exited_clone.store(true, Ordering::Relaxed);
-
-            #[cfg(feature = "debug-log")]
-            debug_log::log("reader thread: exited");
         });
-
-        #[cfg(feature = "debug-log")]
-        debug_log::log("spawn: complete");
 
         Ok(Pane {
             width: size.cols(),
