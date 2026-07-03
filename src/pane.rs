@@ -56,7 +56,7 @@ impl vt100::Callbacks for TitleCallbacks {
 pub struct Pane {
     pub width: u16,
     pub height: u16,
-    writer: Box<dyn Write + Send>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub parser: Arc<Mutex<vt100::Parser<TitleCallbacks>>>,
     pub child_pid: Option<u32>,
     exited: Arc<AtomicBool>,
@@ -92,14 +92,14 @@ impl Pane {
 
         // On Windows (ConPTY), the slave handle must be closed before ConPTY
         // will begin routing the child's output to the master read pipe.
-        // Moving master out first, then dropping slave explicitly before the
-        // reader thread starts, ensures output flows immediately on all platforms.
-        let mut master = pair.master;
+        let master = pair.master;
         drop(pair.slave);
 
-        let writer = master
-            .take_writer()
-            .map_err(|e| SpawnError::FailedToTakeWriter(e.into()))?;
+        let writer: Arc<Mutex<Box<dyn Write + Send>>> = Arc::new(Mutex::new(
+            master
+                .take_writer()
+                .map_err(|e| SpawnError::FailedToTakeWriter(e.into()))?,
+        ));
         let mut reader = master
             .try_clone_reader()
             .map_err(|e| SpawnError::CouldNotCloneReader(e.into()))?;
@@ -111,6 +111,7 @@ impl Pane {
             TitleCallbacks::default(),
         )));
         let parser_clone = Arc::clone(&parser);
+        let writer_clone = Arc::clone(&writer);
         let exited = Arc::new(AtomicBool::new(false));
         let exited_clone = Arc::clone(&exited);
 
@@ -120,7 +121,20 @@ impl Pane {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        parser_clone.lock().unwrap().process(&buf[..n]);
+                        let data = &buf[..n];
+
+                        // ConPTY sends ESC[6n (cursor position request) as a handshake.
+                        // It will block indefinitely until we reply with ESC[row;colR.
+                        if data.windows(4).any(|w| w == b"\x1b[6n") {
+                            let (row, col) = {
+                                let p = parser_clone.lock().unwrap();
+                                p.screen().cursor_position()
+                            };
+                            let response = format!("\x1b[{};{}R", row + 1, col + 1);
+                            let _ = writer_clone.lock().unwrap().write_all(response.as_bytes());
+                        }
+
+                        parser_clone.lock().unwrap().process(data);
                     }
                 }
             }
@@ -152,7 +166,7 @@ impl Pane {
     }
 
     pub fn write(&mut self, data: &[u8]) -> Result<(), WriteError> {
-        self.writer.write_all(data)?;
+        self.writer.lock().unwrap().write_all(data)?;
         Ok(())
     }
 
