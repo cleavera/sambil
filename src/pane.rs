@@ -83,18 +83,24 @@ impl Pane {
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("SAMBIL", "1");
+
         let child = pair
             .slave
             .spawn_command(cmd)
             .map_err(|e| SpawnError::FailedToSpawn(e.into()))?;
         let child_pid = child.process_id();
 
-        let writer = pair
-            .master
+        // On Windows (ConPTY), the slave handle must be closed before ConPTY
+        // will begin routing the child's output to the master read pipe.
+        // Moving master out first, then dropping slave explicitly before the
+        // reader thread starts, ensures output flows immediately on all platforms.
+        let mut master = pair.master;
+        drop(pair.slave);
+
+        let writer = master
             .take_writer()
             .map_err(|e| SpawnError::FailedToTakeWriter(e.into()))?;
-        let mut reader = pair
-            .master
+        let mut reader = master
             .try_clone_reader()
             .map_err(|e| SpawnError::CouldNotCloneReader(e.into()))?;
 
@@ -129,7 +135,7 @@ impl Pane {
             child_pid,
             exited,
             _child: child,
-            master: pair.master,
+            master,
             cwd: cwd.to_path_buf(),
         })
     }
