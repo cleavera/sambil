@@ -1,8 +1,7 @@
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use crate::pane::{Pane, SpawnError as PaneSpawnError, ResizeError as PaneResizeError, WriteError as PaneWriteError, path_basename};
+use crate::pane::{Pane, SpawnError as PaneSpawnError, ResizeError as PaneResizeError, WriteError as PaneWriteError};
 use crate::size::{ColOffset, ContentArea, TerminalSize};
 
 use as_source::AsSource;
@@ -245,7 +244,7 @@ impl PaneSet {
         let mut changed = false;
         let mut pi = 0;
         while pi < self.panes.len().saturating_sub(1) {
-            if self.panes[pi].exited.load(Ordering::Relaxed) {
+            if self.panes[pi].is_exited() {
                 self.panes.remove(pi);
                 changed = true;
                 if self.active > pi && self.active > 0 {
@@ -263,7 +262,7 @@ impl PaneSet {
     pub fn last_has_exited(&self) -> bool {
         self.panes
             .last()
-            .map(|p| p.exited.load(Ordering::Relaxed))
+            .map(|p| p.is_exited())
             .unwrap_or(false)
     }
 }
@@ -476,10 +475,6 @@ impl PaneManager {
             }
         }
         std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
-    }
-
-    pub fn active_cwd_name(&self) -> String {
-        path_basename(&self.active_cwd())
     }
 
     pub fn rename_active(&mut self, name: String) {

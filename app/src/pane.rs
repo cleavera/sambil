@@ -59,10 +59,10 @@ pub struct Pane {
     writer: Box<dyn Write + Send>,
     pub parser: Arc<Mutex<vt100::Parser<TitleCallbacks>>>,
     pub child_pid: Option<u32>,
-    pub exited: Arc<AtomicBool>,
+    exited: Arc<AtomicBool>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
     master: Box<dyn portable_pty::MasterPty + Send>,
-    pub cwd: std::path::PathBuf,
+    cwd: std::path::PathBuf,
 }
 
 impl Pane {
@@ -118,6 +118,10 @@ impl Pane {
             master: pair.master,
             cwd: cwd.to_path_buf(),
         })
+    }
+
+    pub fn is_exited(&self) -> bool {
+        self.exited.load(Ordering::Relaxed)
     }
 
     pub fn auto_name(&self) -> String {
