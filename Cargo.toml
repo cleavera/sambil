@@ -11,6 +11,9 @@ keywords = ["terminal", "multiplexer", "pty", "tabs", "tui"]
 categories = ["command-line-utilities"]
 exclude = ["roadmap.md"]
 
+[features]
+debug-log = []
+
 [dependencies]
 crossterm = "0.29"
 portable-pty = "0.9"
