@@ -26,7 +26,7 @@ mod windows_cwd {
     const CURDIR_LENGTH_OFFSET: usize = 0x38;
     const CURDIR_BUFFER_OFFSET: usize = 0x40;
 
-    extern "system" {
+    unsafe extern "system" {
         fn OpenProcess(desired_access: u32, inherit_handle: i32, pid: u32) -> *mut c_void;
         fn CloseHandle(handle: *mut c_void) -> i32;
         fn ReadProcessMemory(
@@ -39,7 +39,7 @@ mod windows_cwd {
     }
 
     #[link(name = "ntdll")]
-    extern "system" {
+    unsafe extern "system" {
         fn NtQueryInformationProcess(
             handle: *mut c_void,
             info_class: u32,
