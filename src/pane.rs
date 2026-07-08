@@ -158,10 +158,6 @@ impl Pane {
         self.exited.load(Ordering::Relaxed)
     }
 
-    pub fn get_cwd(&self) -> &std::path::Path {
-        &self.cwd
-    }
-
     pub fn get_auto_name(&self) -> String {
         match self.parser.lock().unwrap().callbacks().title.as_deref() {
             Some(title) if !title.is_empty() => title.to_string(),
