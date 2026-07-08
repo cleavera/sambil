@@ -9,6 +9,156 @@ use crate::size::{ColOffset, ContentArea, TerminalSize};
 
 use foible::AsSource;
 
+#[cfg(target_os = "windows")]
+mod windows_cwd {
+    use std::ffi::c_void;
+    use std::path::PathBuf;
+
+    const PROCESS_QUERY_INFORMATION: u32 = 0x0400;
+    const PROCESS_VM_READ: u32 = 0x0010;
+
+    // Offsets into PEB and RTL_USER_PROCESS_PARAMETERS on 64-bit Windows.
+    // PEB.ProcessParameters is a pointer at offset 0x20.
+    const PEB_PROCESS_PARAMETERS_OFFSET: usize = 0x20;
+    // RTL_USER_PROCESS_PARAMETERS.CurrentDirectory.DosPath (UNICODE_STRING):
+    //   Length   (u16) at +0x38
+    //   Buffer   (ptr) at +0x40  (after the u16 Length, u16 MaxLength, u32 pad)
+    const CURDIR_LENGTH_OFFSET: usize = 0x38;
+    const CURDIR_BUFFER_OFFSET: usize = 0x40;
+
+    extern "system" {
+        fn OpenProcess(desired_access: u32, inherit_handle: i32, pid: u32) -> *mut c_void;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+        fn ReadProcessMemory(
+            process: *mut c_void,
+            base: *const c_void,
+            buf: *mut c_void,
+            size: usize,
+            bytes_read: *mut usize,
+        ) -> i32;
+    }
+
+    #[link(name = "ntdll")]
+    extern "system" {
+        fn NtQueryInformationProcess(
+            handle: *mut c_void,
+            info_class: u32,
+            info: *mut c_void,
+            info_len: u32,
+            return_len: *mut u32,
+        ) -> i32;
+    }
+
+    // Matches PROCESS_BASIC_INFORMATION on 64-bit Windows.
+    #[repr(C)]
+    struct ProcessBasicInformation {
+        _reserved1: *mut c_void,
+        peb_base_address: *mut c_void,
+        _reserved2: [*mut c_void; 2],
+        _unique_process_id: usize,
+        _reserved3: *mut c_void,
+    }
+
+    pub fn pid_cwd(pid: u32) -> Option<PathBuf> {
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+            if handle.is_null() {
+                return None;
+            }
+            let result = read_cwd(handle);
+            CloseHandle(handle);
+            result
+        }
+    }
+
+    unsafe fn read_process_usize(handle: *mut c_void, addr: usize) -> Option<usize> {
+        let mut value: usize = 0;
+        let mut bytes_read: usize = 0;
+        if ReadProcessMemory(
+            handle,
+            addr as *const c_void,
+            &mut value as *mut _ as *mut c_void,
+            std::mem::size_of::<usize>(),
+            &mut bytes_read,
+        ) == 0 {
+            return None;
+        }
+        Some(value)
+    }
+
+    unsafe fn read_process_u16(handle: *mut c_void, addr: usize) -> Option<u16> {
+        let mut value: u16 = 0;
+        let mut bytes_read: usize = 0;
+        if ReadProcessMemory(
+            handle,
+            addr as *const c_void,
+            &mut value as *mut _ as *mut c_void,
+            std::mem::size_of::<u16>(),
+            &mut bytes_read,
+        ) == 0 {
+            return None;
+        }
+        Some(value)
+    }
+
+    unsafe fn read_cwd(handle: *mut c_void) -> Option<PathBuf> {
+        // Step 1: get the PEB base address.
+        let mut pbi = ProcessBasicInformation {
+            _reserved1: std::ptr::null_mut(),
+            peb_base_address: std::ptr::null_mut(),
+            _reserved2: [std::ptr::null_mut(); 2],
+            _unique_process_id: 0,
+            _reserved3: std::ptr::null_mut(),
+        };
+        let mut return_len: u32 = 0;
+        let status = NtQueryInformationProcess(
+            handle,
+            0, // ProcessBasicInformation
+            &mut pbi as *mut _ as *mut c_void,
+            std::mem::size_of::<ProcessBasicInformation>() as u32,
+            &mut return_len,
+        );
+        if status != 0 {
+            return None;
+        }
+
+        // Step 2: read PEB.ProcessParameters pointer.
+        let peb = pbi.peb_base_address as usize;
+        let params_ptr = read_process_usize(handle, peb + PEB_PROCESS_PARAMETERS_OFFSET)?;
+
+        // Step 3: read the CurrentDirectory UNICODE_STRING header.
+        let length = read_process_u16(handle, params_ptr + CURDIR_LENGTH_OFFSET)?;
+        let buf_ptr = read_process_usize(handle, params_ptr + CURDIR_BUFFER_OFFSET)?;
+        if length == 0 || buf_ptr == 0 {
+            return None;
+        }
+
+        // Step 4: read the wide string from the target process.
+        let char_count = (length as usize) / 2;
+        let mut wide: Vec<u16> = vec![0u16; char_count];
+        let mut bytes_read: usize = 0;
+        if ReadProcessMemory(
+            handle,
+            buf_ptr as *const c_void,
+            wide.as_mut_ptr() as *mut c_void,
+            length as usize,
+            &mut bytes_read,
+        ) == 0 {
+            return None;
+        }
+
+        let path_str = String::from_utf16_lossy(&wide[..bytes_read / 2]);
+        // Strip trailing backslash unless it's a bare root (e.g. "C:\").
+        let stripped = path_str.trim_end_matches('\\');
+        let canonical = if stripped.len() == 2 && stripped.ends_with(':') {
+            format!("{stripped}\\")
+        } else {
+            stripped.to_string()
+        };
+        Some(PathBuf::from(canonical))
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod macos_cwd {
     use std::ffi::CStr;
@@ -475,6 +625,12 @@ impl PaneManager {
         #[cfg(target_os = "macos")]
         if let Some(pid) = pane.child_pid {
             if let Some(path) = macos_cwd::pid_cwd(pid) {
+                return path;
+            }
+        }
+        #[cfg(target_os = "windows")]
+        if let Some(pid) = pane.child_pid {
+            if let Some(path) = windows_cwd::pid_cwd(pid) {
                 return path;
             }
         }
