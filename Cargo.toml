@@ -1,6 +1,6 @@
 [package]
 name = "sambil"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "A cross-platform, keyboard-driven terminal multiplexer with tabs and horizontal splits"
 license = "MIT"
